@@ -10,30 +10,89 @@
     </button>
   </view>
 
-  <view class="hero-band">
-    <view class="hero-content">
-      <view class="hero-kicker">SUNSHINE NEIGHBORHOOD</view>
-      <view class="hero-title">顺路帮个忙，<br />让邻里更近一步</view>
-      <view class="hero-copy">发布一件小事，等待邻里接单，费用托管更安心。</view>
-      <button class="hero-action" bindtap="goPublish">
-        <text>发布跑腿</text>
-        <text class="arrow">›</text>
-      </button>
-    </view>
-    <view class="hero-illustration" aria-hidden="true">
-      <view class="sun-disc"></view>
-      <view class="building building-left">
-        <view class="window-row"><text></text><text></text></view>
-        <view class="window-row"><text></text><text></text></view>
+  <!-- 首页广告轮播。用原生 swiper：滑动手势、惯性和循环播放由基础库实现，
+       比手写 touch 事件稳。三张各用不同底色，滑到下一张时视觉边界清楚。 -->
+  <swiper
+    class="hero-swiper"
+    autoplay="{{true}}"
+    circular="{{true}}"
+    interval="5200"
+    duration="420"
+    bindchange="onHeroChange"
+  >
+    <swiper-item>
+      <view class="hero-band hero-band-publish">
+        <view class="hero-content">
+          <view class="hero-kicker">SUNSHINE NEIGHBORHOOD</view>
+          <view class="hero-title">顺路帮个忙，<br />让邻里更近一步</view>
+          <view class="hero-copy">发布一件小事，等待邻里接单，费用托管更安心。</view>
+          <button class="hero-action" bindtap="goPublish">
+            <text>发布跑腿</text>
+            <text class="arrow">›</text>
+          </button>
+        </view>
+        <view class="hero-illustration" aria-hidden="true">
+          <view class="sun-disc"></view>
+          <view class="building building-left">
+            <view class="window-row"><text></text><text></text></view>
+            <view class="window-row"><text></text><text></text></view>
+          </view>
+          <view class="building building-right">
+            <view class="window-row"><text></text><text></text><text></text></view>
+            <view class="window-row"><text></text><text></text><text></text></view>
+          </view>
+          <view class="tree tree-one"></view>
+          <view class="tree tree-two"></view>
+          <view class="path"></view>
+        </view>
       </view>
-      <view class="building building-right">
-        <view class="window-row"><text></text><text></text><text></text></view>
-        <view class="window-row"><text></text><text></text><text></text></view>
+    </swiper-item>
+
+    <!-- 第 2 张：接单员招募。按钮文案跟认证进度走（已认证的人给"查看权益"，
+         不该再劝他去申请），文案和下方滚动条同源，避免两处口径不一致。 -->
+    <swiper-item>
+      <view class="hero-band hero-band-earn">
+        <view class="hero-glyph">¥</view>
+        <view class="hero-content">
+          <view class="hero-kicker">SUNSHINE EARN</view>
+          <view class="hero-title">顺路接单，<br />零碎时间换报酬</view>
+          <view class="hero-copy">
+            实名认证 + 保证金 ¥{{acceptorAd.deposit}}（退出可退），审核通过即可接单。
+          </view>
+          <button class="hero-action hero-action-light" bindtap="goAcceptor">
+            <text>{{acceptorAd.cta}}</text>
+            <text class="arrow">›</text>
+          </button>
+        </view>
       </view>
-      <view class="tree tree-one"></view>
-      <view class="tree tree-two"></view>
-      <view class="path"></view>
-    </view>
+    </swiper-item>
+
+    <!-- 第 3 张：回答"钱安不安全"，给不想发布、只想先看看的人一个去处 -->
+    <swiper-item>
+      <view class="hero-band hero-band-safe">
+        <view class="hero-glyph">✓</view>
+        <view class="hero-content">
+          <view class="hero-kicker">SAFE TRADE</view>
+          <view class="hero-title">报酬先托管，<br />完成再结算</view>
+          <view class="hero-copy">
+            发布者下单即冻结报酬，确认完成后才打给接单员，双方都安心。
+          </view>
+          <button class="hero-action hero-action-amber" bindtap="goCategories">
+            <text>去逛任务大厅</text>
+            <text class="arrow">›</text>
+          </button>
+        </view>
+      </view>
+    </swiper-item>
+  </swiper>
+
+  <!-- 圆点自己画：swiper 内置指示点在深绿底上看不清 -->
+  <view class="hero-dots">
+    <view
+      wx:for="{{heroDots}}"
+      wx:key="*this"
+      class="hero-dot {{heroIndex === item ? 'active' : ''}}"
+    ></view>
   </view>
 
   <!-- 接单员招募滚动条：紧贴"发布跑腿"下方。

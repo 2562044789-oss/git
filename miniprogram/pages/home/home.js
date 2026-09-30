@@ -33,6 +33,8 @@ function buildAcceptorAd(acceptor) {
   return {
     text: template.replace("{deposit}", deposit),
     cta: ACCEPTOR_AD_CTA[status] || ACCEPTOR_AD_CTA[0],
+    // 轮播第 2 张要单独引用金额，这里一并带出来，避免两处各算一遍
+    deposit,
   };
 }
 
@@ -44,6 +46,9 @@ Page({
     tasks: [],
     announcements: [],
     acceptorAd: buildAcceptorAd(null),
+    // 首页轮播当前页与圆点。圆点数量必须和 home.wxml 里 swiper-item 的数量一致。
+    heroIndex: 0,
+    heroDots: [0, 1, 2],
     loading: true,
   },
 
@@ -105,6 +110,11 @@ Page({
 
   goAcceptor() {
     wx.navigateTo({ url: "/pages/acceptor/acceptor" });
+  },
+
+  // swiper 的滑动/自动播放都会触发，只用来同步下方圆点
+  onHeroChange(event) {
+    this.setData({ heroIndex: event.detail.current });
   },
 
   goCategory(event) {

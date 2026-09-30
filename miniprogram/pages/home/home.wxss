@@ -79,14 +79,92 @@
   line-height: 27rpx;
 }
 
+/* swiper 不会按内容自适应高度，必须给死。430rpx ≈ 卡片内容自然高度再加一点富余，
+   防止窄屏上文案换到 2 行后被裁掉。 */
+.hero-swiper {
+  height: 430rpx;
+}
+
 .hero-band {
   position: relative;
-  min-height: 370rpx;
+  height: 100%;
   overflow: hidden;
   padding: 38rpx 34rpx;
   border-radius: 30rpx;
+}
+
+.hero-band-publish {
   color: #173b27;
   background: #dff3e5;
+}
+
+/* 三张广告各用不同底色：滑动切换时视觉边界清楚，用户能立刻看出"换了一屏" */
+.hero-band-earn {
+  color: #ffffff;
+  background: #3f9d69;
+}
+
+.hero-band-safe {
+  color: #4a3520;
+  background: #fdf3e0;
+}
+
+.hero-band-earn .hero-kicker {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.hero-band-safe .hero-kicker {
+  color: #b4813a;
+}
+
+.hero-band-earn .hero-copy {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.hero-band-safe .hero-copy {
+  color: #8a6f4d;
+}
+
+/* 第 2、3 张的大号半透明字符当插画用，与第 1 张的天际线保持相近的视觉重心 */
+.hero-glyph {
+  position: absolute;
+  right: 24rpx;
+  bottom: -26rpx;
+  z-index: 1;
+  font-size: 220rpx;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.hero-band-earn .hero-glyph {
+  color: rgba(255, 255, 255, 0.18);
+}
+
+.hero-band-safe .hero-glyph {
+  color: rgba(217, 155, 63, 0.22);
+}
+
+/* 圆点指示器做在 swiper 外面：内置指示点在深绿底上看不清，
+   放外面还能避开遮住卡片底部插画的问题。 */
+.hero-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10rpx;
+  margin-top: 18rpx;
+}
+
+.hero-dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 999rpx;
+  background: #c8dccf;
+  transition: width 0.24s ease, background 0.24s ease;
+}
+
+.hero-dot.active {
+  width: 32rpx;
+  background: #3f9d69;
 }
 
 .hero-content {
@@ -117,18 +195,35 @@
 }
 
 .hero-action {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 205rpx;
+  /* 用 min-width 而不是写死 width：第 3 张的按钮文案更长（"去逛任务大厅"），
+     固定宽度会把文字挤换行。min-width 让四字按钮保持和第 1 张一样宽。 */
+  min-width: 205rpx;
   height: 72rpx;
   margin-top: 24rpx;
+  padding: 0 26rpx;
   border-radius: 16rpx;
   color: #ffffff;
   background: #3f9d69;
   box-shadow: 0 12rpx 24rpx rgba(63, 157, 105, 0.2);
   font-size: 26rpx;
   font-weight: 700;
+  white-space: nowrap;
+}
+
+/* 深绿底上用白底配绿字；米色底上用琥珀色 */
+.hero-action-light {
+  color: #2f7d52;
+  background: #ffffff;
+  box-shadow: 0 12rpx 24rpx rgba(24, 74, 48, 0.18);
+}
+
+.hero-action-amber {
+  color: #ffffff;
+  background: #d99b3f;
+  box-shadow: 0 12rpx 24rpx rgba(217, 155, 63, 0.22);
 }
 
 .arrow {

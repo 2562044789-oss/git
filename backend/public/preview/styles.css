@@ -171,13 +171,60 @@ button {
   text-align: center;
 }
 
-.hero {
+/* 首页顶部广告轮播。滑动用系统原生的横向滚动 + scroll-snap，
+   手机上才有惯性和"甩一下翻页"的手感；轨道本身不设 padding，
+   否则"一屏宽度"的计算会被 padding 带偏，页码和圆点就对不上了。 */
+.hero-carousel {
   position: relative;
-  min-height: 220px;
+}
+
+.hero-track {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.hero-track::-webkit-scrollbar {
+  display: none;
+}
+
+.hero-slide {
+  position: relative;
+  flex: 0 0 100%;
   overflow: hidden;
+  min-height: 220px;
   padding: 28px 24px;
   border-radius: 24px;
+  scroll-snap-align: start;
+  /* 快速滑动时也只翻一页，不会一甩就跳过两张 */
+  scroll-snap-stop: always;
+}
+
+/* 三张广告各用不同底色：滑动切换时视觉边界清楚，用户能立刻看出"换了一屏" */
+.hero-slide.theme-mint {
+  color: #173b27;
   background: #dff3e5;
+}
+
+/* 用更深的绿，不要和下方"接单员招募"细条同色——两张同色块贴在一起会看成一整块 */
+.hero-slide.theme-green {
+  color: #fff;
+  background: #31875a;
+}
+
+.hero-slide.theme-cream {
+  color: #4a3520;
+  background: #fdf3e0;
+}
+
+.hero-slide.theme-green .eyebrow {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.hero-slide.theme-cream .eyebrow {
+  color: #b4813a;
 }
 
 .hero-copy {
@@ -194,17 +241,84 @@ button {
   letter-spacing: 1.2px;
 }
 
-.hero h2 {
+.hero-slide h2 {
   margin: 0;
   font-size: 29px;
   line-height: 1.28;
 }
 
-.hero p {
+.hero-slide p {
   margin: 12px 0 0;
   color: #61796a;
   font-size: 12px;
   line-height: 1.55;
+}
+
+.hero-slide.theme-green p {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.hero-slide.theme-cream p {
+  color: #8a6f4d;
+}
+
+/* 圆点指示器浮在卡片内底部。三种底色上都要看得清，所以给圆点垫一条半透明白色胶囊；
+   左对齐到文案列（与卡片 24px 内边距同一条竖线），避开右下角的插画。 */
+.hero-dots {
+  position: absolute;
+  bottom: 10px;
+  left: 24px;
+  z-index: 4;
+  display: flex;
+  pointer-events: none;
+}
+
+.hero-dot-pill {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.66);
+  backdrop-filter: blur(3px);
+  pointer-events: auto;
+}
+
+.hero-dot {
+  width: 6px;
+  height: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(23, 59, 39, 0.24);
+  cursor: pointer;
+  transition: width 0.24s ease, background 0.24s ease;
+}
+
+.hero-dot.active {
+  width: 16px;
+  background: #2f7d52;
+}
+
+/* 第 2、3 张的大号半透明字符当插画用，与第 1 张的天际线保持相近的视觉重心 */
+.hero-glyph {
+  position: absolute;
+  right: 16px;
+  bottom: -18px;
+  z-index: 1;
+  font-size: 132px;
+  font-weight: 900;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+}
+
+.hero-slide.theme-green .hero-glyph {
+  color: rgba(255, 255, 255, 0.18);
+}
+
+.hero-slide.theme-cream .hero-glyph {
+  color: rgba(217, 155, 63, 0.22);
 }
 
 .primary-button,
@@ -254,6 +368,19 @@ button {
   margin-top: 18px;
   padding: 0 16px;
   font-size: 13px;
+}
+
+/* 深色/暖色底上的按钮要反过来：绿底上用白底配绿字，米底上用琥珀色 */
+.hero-button.invert {
+  color: #2f7d52;
+  background: #fff;
+  box-shadow: 0 10px 20px rgba(24, 74, 48, 0.18);
+}
+
+.hero-button.amber {
+  color: #fff;
+  background: #d99b3f;
+  box-shadow: 0 10px 20px rgba(217, 155, 63, 0.22);
 }
 
 .hero-scene {
@@ -1229,11 +1356,17 @@ button {
   border: 1px solid #e3ede6;
 }
 
-@media (max-width: 380px) {
-  .hero h2 {
+/* 真机宽度（360–430px）下 hero 标题会从 2 行挤成 3 行：
+   文案列只占 64% 宽，7 个字 × 29px 就超过列宽了。
+   只收标题字号、不动其它页面，避免影响整站在小屏下的观感。 */
+@media (max-width: 430px) {
+  .hero-slide h2 {
     font-size: 25px;
   }
+}
 
+@media (max-width: 380px) {
+  /* 字号已在上面 430px 的断点里统一处理，这里只留版式微调 */
   .hero-copy {
     width: 68%;
   }
@@ -1330,10 +1463,18 @@ button {
   }
 }
 
-/* 尊重系统的"减少动态效果"设置：文字静止，其余样式不变 */
+/* 尊重系统的"减少动态效果"设置：文字静止、平滑滚动与圆点过渡取消，其余样式不变 */
 @media (prefers-reduced-motion: reduce) {
   .acceptor-ad-track {
     animation: none;
+  }
+
+  .hero-track {
+    scroll-behavior: auto;
+  }
+
+  .hero-dot {
+    transition: none;
   }
 }
 

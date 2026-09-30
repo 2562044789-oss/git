@@ -103,6 +103,86 @@ function acceptorAdCopy() {
   };
 }
 
+// 首页顶部轮播广告的三张内容。
+// 第 1 张是原有主视觉（发布跑腿）；第 2 张是接单员招募，按钮文案跟认证状态走
+// ——已认证的人给"查看权益"，不该再劝他去申请；第 3 张讲资金托管，回答"钱安不安全"。
+// 三张各用不同底色：滑动切换时视觉边界清楚，用户能立刻看出"换了一屏"。
+function heroSlides() {
+  const info = acceptorOf();
+  const deposit = Number(info?.required_deposit || 50)
+    .toFixed(2)
+    .replace(/\.00$/, "");
+  return [
+    {
+      key: "publish",
+      theme: "mint",
+      scene: "town",
+      eyebrow: "SUNSHINE NEIGHBORHOOD",
+      title: "顺路帮个忙，<br>让邻里更近一步",
+      copy: "发布一件小事，等待邻里接单，费用托管更安心。",
+      cta: "发布跑腿",
+      view: "publish",
+    },
+    {
+      key: "earn",
+      theme: "green",
+      scene: "coin",
+      eyebrow: "SUNSHINE EARN",
+      title: "顺路接单，<br>零碎时间换报酬",
+      copy: `实名认证 + 保证金 ¥${deposit}（退出可退），审核通过即可接单。`,
+      cta: acceptorAdCopy().cta,
+      action: "acceptor",
+    },
+    {
+      key: "safe",
+      theme: "cream",
+      scene: "shield",
+      eyebrow: "SAFE TRADE",
+      title: "报酬先托管，<br>完成再结算",
+      copy: "发布者下单即冻结报酬，确认完成后才打给接单员，双方都安心。",
+      cta: "去逛任务大厅",
+      view: "tasks",
+    },
+  ];
+}
+
+// 第 1 张沿用邻里天际线插画；第 2、3 张用一个大号半透明字符当图形，
+// 不必再画一套 SVG，同时保持三张的视觉重心一致（都偏右下）。
+function heroScene(kind) {
+  if (kind === "town") {
+    return `<div class="hero-scene" aria-hidden="true">
+        <div class="hero-sun"></div>
+        <div class="hero-building"></div>
+        <div class="hero-tree"></div>
+      </div>`;
+  }
+  const glyph = kind === "coin" ? "¥" : "✓";
+  return `<div class="hero-glyph" aria-hidden="true">${glyph}</div>`;
+}
+
+function heroSlideMarkup(slide, index, total) {
+  const buttonClass =
+    slide.theme === "green" ? "invert" : slide.theme === "cream" ? "amber" : "";
+  const target = slide.action
+    ? `data-action="${slide.action}"`
+    : `data-view="${slide.view}"`;
+  return `
+      <article
+        class="hero-slide theme-${slide.theme}"
+        role="group"
+        aria-roledescription="广告"
+        aria-label="第 ${index + 1} 张，共 ${total} 张"
+      >
+        <div class="hero-copy">
+          <div class="eyebrow">${escapeHtml(slide.eyebrow)}</div>
+          <h2>${slide.title}</h2>
+          <p>${escapeHtml(slide.copy)}</p>
+          <button class="primary-button hero-button ${buttonClass}" ${target}>${escapeHtml(slide.cta)}</button>
+        </div>
+        ${heroScene(slide.scene)}
+      </article>`;
+}
+
 function statusMeta(status, kind = "task") {
   const taskMap = {
     0: ["待接单", "green"],
@@ -228,6 +308,7 @@ function renderHome() {
   setTabBar(true);
   const tasks = state.tasks.slice(0, 3);
   const announcement = state.config?.announcements?.[0];
+  const slides = heroSlides();
   app.innerHTML = `
     <section class="view">
       <header class="view-header">
@@ -241,17 +322,24 @@ function renderHome() {
         </button>
       </header>
 
-      <section class="hero">
-        <div class="hero-copy">
-          <div class="eyebrow">SUNSHINE NEIGHBORHOOD</div>
-          <h2>顺路帮个忙，<br>让邻里更近一步</h2>
-          <p>发布一件小事，等待邻里接单，费用托管更安心。</p>
-          <button class="primary-button hero-button" data-view="publish">发布跑腿</button>
+      <section class="hero-carousel">
+        <div class="hero-track" id="heroTrack" tabindex="0" aria-label="精选推荐，可左右滑动切换">
+          ${slides.map((slide, index) => heroSlideMarkup(slide, index, slides.length)).join("")}
         </div>
-        <div class="hero-scene" aria-hidden="true">
-          <div class="hero-sun"></div>
-          <div class="hero-building"></div>
-          <div class="hero-tree"></div>
+        <div class="hero-dots">
+          <span class="hero-dot-pill">
+            ${slides
+              .map(
+                (slide, index) => `
+              <button
+                class="hero-dot${index === 0 ? " active" : ""}"
+                data-hero-dot="${index}"
+                aria-label="第 ${index + 1} 张：${escapeHtml(slide.cta)}"
+                aria-selected="${index === 0}"
+              ></button>`,
+              )
+              .join("")}
+          </span>
         </div>
       </section>
 
@@ -315,6 +403,113 @@ function renderHome() {
       </section>
     </section>
   `;
+  initHeroCarousel();
+}
+
+// 首页广告轮播。滑动手势交给横向滚动（scroll-snap）本身，不自己模拟 touch 事件——
+// 这样手机上才有原生惯性、才有"甩一下翻页"的手感，也不用处理各种边界情况。
+// 定时器放模块作用域：renderHome 会整体替换 DOM，重渲染前必须先清掉旧的，
+// 否则每次回首页都会多挂一个定时器。
+const HERO_INTERVAL = 5200;
+let heroAutoTimer = null;
+let heroResumeTimer = null;
+
+function prefersReducedMotion() {
+  return window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
+}
+
+function stopHeroAuto() {
+  if (heroAutoTimer) {
+    clearInterval(heroAutoTimer);
+    heroAutoTimer = null;
+  }
+  if (heroResumeTimer) {
+    clearTimeout(heroResumeTimer);
+    heroResumeTimer = null;
+  }
+}
+
+// 用户手动滑动后暂停自动播放，别跟他的方向抢；停够一段时间再恢复。
+function pauseHeroAuto() {
+  if (heroAutoTimer) {
+    clearInterval(heroAutoTimer);
+    heroAutoTimer = null;
+  }
+  if (heroResumeTimer) clearTimeout(heroResumeTimer);
+  heroResumeTimer = setTimeout(() => initHeroCarousel(), 8000);
+}
+
+function initHeroCarousel() {
+  const track = document.getElementById("heroTrack");
+  const carousel = track?.closest(".hero-carousel");
+  const dots = [...(carousel?.querySelectorAll("[data-hero-dot]") || [])];
+  if (!track || dots.length === 0) return;
+
+  stopHeroAuto();
+
+  const total = dots.length;
+  let frame = 0;
+
+  const setActive = (index) => {
+    dots.forEach((dot, i) => {
+      const active = i === index;
+      dot.classList.toggle("active", active);
+      dot.setAttribute("aria-selected", String(active));
+    });
+  };
+
+  // 页码由"滚动位置 ÷ 一屏宽度"反推，不额外维护一个 index：
+  // 用户手动滑动时不需要同步状态，滑到哪就是哪一页。
+  const currentIndex = () => {
+    const width = track.clientWidth || 1;
+    return Math.min(total - 1, Math.max(0, Math.round(track.scrollLeft / width)));
+  };
+
+  const goTo = (index, smooth = true) => {
+    track.scrollTo({
+      left: index * track.clientWidth,
+      // 系统开了"减少动态效果"时直接跳页，不做平滑滚动
+      behavior: smooth && !prefersReducedMotion() ? "smooth" : "auto",
+    });
+    setActive(index);
+  };
+
+  track.addEventListener(
+    "scroll",
+    () => {
+      // 一次滑动会连发几十个 scroll 事件，用 rAF 合并成每帧最多写一次 DOM
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        setActive(currentIndex());
+      });
+    },
+    { passive: true },
+  );
+
+  dots.forEach((dot) => {
+    dot.addEventListener("click", () => {
+      goTo(Number(dot.dataset.heroDot));
+      pauseHeroAuto();
+    });
+  });
+
+  // 只有一张、或系统开了"减少动态效果"时不自动播放；手动滑动始终可用
+  if (total < 2 || prefersReducedMotion()) return;
+
+  heroAutoTimer = setInterval(() => {
+    // 切到别的页面后 hero 已被替换，定时器自己退场，不会长期挂着
+    if (!document.contains(track)) {
+      stopHeroAuto();
+      return;
+    }
+    if (document.hidden) return;
+    goTo((currentIndex() + 1) % total);
+  }, HERO_INTERVAL);
+
+  ["pointerdown", "touchstart", "focusin"].forEach((type) =>
+    track.addEventListener(type, pauseHeroAuto, { passive: true }),
+  );
 }
 
 async function loadTasks() {
