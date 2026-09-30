@@ -2,8 +2,36 @@ const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
-const { signToken, verifyPassword, verifyToken } = require("./auth");
+const { SECRET_SOURCE, signToken, verifyPassword, verifyToken } = require("./auth");
 const { all, db, get, now, parseJson, run, transaction } = require("./db");
+const {
+  HttpError,
+  enforceRateLimit,
+  fail,
+  ok,
+  optionalText,
+  parseBody,
+  readMoney,
+  readPagination,
+  requireValue,
+  resolveCorsOrigin,
+  sendJson,
+} = require("./http");
+const { clientAddress, isTrustedDemoRequest } = require("./network");
+const {
+  COMPLAINT_STATUS,
+  ORDER_STATUS,
+  PAY_STATUS,
+  TASK_STATUS,
+  TASK_STATUS_VALUES,
+  deriveTaskStatus,
+} = require("./status");
+const {
+  orderView,
+  publicAdminUser,
+  publicUser,
+  taskView,
+} = require("./views");
 const {
   exchangeCodeForSession,
   isMockLoginEnabled,
@@ -17,74 +45,16 @@ const PUBLIC_DIR = path.join(__dirname, "..", "public");
 const serviceFeeRate = Number(process.env.SERVICE_FEE_RATE || 0);
 const rechargeMode = process.env.WECHAT_PAY_MODE || "mock";
 const withdrawMode = process.env.WECHAT_TRANSFER_MODE || "mock";
-
-class HttpError extends Error {
-  constructor(status, message) {
-    super(message);
-    this.status = status;
-  }
-}
-
-const rateLimitStore = new Map();
-
-function sendJson(res, status, payload) {
-  res.writeHead(status, {
-    "Content-Type": "application/json; charset=utf-8",
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
-  });
-  res.end(JSON.stringify(payload));
-}
-
-function ok(res, data = null, msg = "success") {
-  sendJson(res, 200, { code: 200, msg, data });
-}
-
-function fail(res, error) {
-  const status = error.status || 500;
-  sendJson(res, status, {
-    code: status,
-    msg: error.status ? error.message : "服务器处理请求失败",
-    data: null,
-  });
-  if (!error.status) console.error(error);
-}
-
-function requireValue(condition, message) {
-  if (!condition) throw new HttpError(400, message);
-}
-
-function optionalText(value, maxLength) {
-  return String(value ?? "").trim().slice(0, maxLength);
-}
-
-function publicUser(user) {
-  const { openid, ...safeUser } = user;
-  return safeUser;
-}
-
-function parseBody(req) {
-  return new Promise((resolve, reject) => {
-    let body = "";
-    req.on("data", (chunk) => {
-      body += chunk;
-      if (body.length > 12 * 1024 * 1024) {
-        reject(new HttpError(413, "请求内容过大"));
-        req.destroy();
-      }
-    });
-    req.on("end", () => {
-      if (!body) return resolve({});
-      try {
-        resolve(JSON.parse(body));
-      } catch {
-        reject(new HttpError(400, "请求数据不是有效的 JSON"));
-      }
-    });
-    req.on("error", reject);
-  });
-}
+// 超级管理员角色值（admins.role）。资金裁决等破坏性操作要求 role >= SUPER_ADMIN_ROLE，
+// 修复此前 admins.role 只在登录响应里回显、从不参与任何授权判断的问题
+const SUPER_ADMIN_ROLE = 2;
+// 信用分上限与交易门槛。修复此前 credit_score 既封顶 100（正向评价对高分用户无效）、
+// 又完全不参与任何业务判断（纯装饰字段）的问题
+const MAX_CREDIT_SCORE = 120;
+const MIN_CREDIT_TO_TRADE = 60;
+// 上传目录总量配额，防止"单文件 5MB + 高频调用"持续打满磁盘
+const MAX_UPLOAD_FILES = 500;
+const MAX_UPLOAD_BYTES = 200 * 1024 * 1024;
 
 function authenticate(req, adminOnly = false) {
   const header = req.headers.authorization || "";
@@ -103,25 +73,80 @@ function authenticate(req, adminOnly = false) {
   return payload;
 }
 
-function enforceRateLimit(req, bucket, limit = 120, windowMs = 60_000) {
-  const key = `${req.socket.remoteAddress}:${bucket}`;
-  const current = rateLimitStore.get(key) || { count: 0, resetAt: Date.now() + windowMs };
-  if (current.resetAt < Date.now()) {
-    current.count = 0;
-    current.resetAt = Date.now() + windowMs;
-  }
-  current.count += 1;
-  rateLimitStore.set(key, current);
-  if (current.count > limit) throw new HttpError(429, "操作过于频繁，请稍后再试");
+// 可选字段清洗：undefined / null 表示"本次不修改"（保持数据库原值），
+// 其余值统一 trim 并截断到最大长度。修复此前改资料/加地址直接透传原始输入、
+// 既无长度上限也未清洗的问题（原审计问题 #10）。
+function pickText(value, maxLength) {
+  return value === undefined || value === null ? null : optionalText(value, maxLength);
 }
 
-// 周期性清理过期的限流计数，避免长时间运行后 Map 无限增长
-setInterval(() => {
-  const nowTs = Date.now();
-  for (const [key, item] of rateLimitStore) {
-    if (item.resetAt < nowTs) rateLimitStore.delete(key);
+// 破坏性操作（资金裁决、停用账号等）要求超级管理员身份。
+// 修复此前 admins.role 仅在登录响应里回显、从不参与任何授权判断的问题。
+function requireSuperAdmin(identity) {
+  const admin = get("SELECT role FROM admins WHERE id = ?", [identity?.id]);
+  if (!admin || Number(admin.role) < SUPER_ADMIN_ROLE) {
+    throw new HttpError(403, "该操作需要超级管理员权限");
   }
-}, 60_000).unref();
+}
+
+// 校验管理员设置的任务状态是否合法。
+// 修复此前 PUT /api/admin/tasks/:id/status 直接 Number(body.status) 落库、
+// 既无枚举校验、也可把任务直接改成"已完成"从而绕过资金结算流程的问题。
+function assertAssignableTaskStatus(status, taskId) {
+  requireValue(
+    TASK_STATUS_VALUES.includes(status),
+    `任务状态必须是 ${TASK_STATUS_VALUES.join(" / ")} 之一`,
+  );
+  if (status === TASK_STATUS.COMPLETED) {
+    const order = get("SELECT pay_status FROM orders WHERE task_id = ?", [taskId]);
+    // 没有订单同样意味着钱还在托管中：发布任务时就已经从发布者余额扣款，
+    // 尚未产生订单说明这笔钱还没有任何结算或退出去向。
+    const escrowHeld = !order || Number(order.pay_status) === PAY_STATUS.ESCROW;
+    if (escrowHeld) {
+      throw new HttpError(
+        409,
+        "该任务资金仍在托管中，不能直接标记为已完成；请走确认完成或投诉裁决流程",
+      );
+    }
+  }
+}
+
+// 读取订单资金当前所处的真实位置——这是裁决时唯一可信的判据。
+//
+// 修复背景（原审计问题 #11）：原实现用
+//   moneyFrozen = [1, 2, 5].includes(order.status) && order.pay_status === 1
+// 来判断"钱是否还在托管中"。对已完成订单（status = 3, pay_status = 2）该条件恒为 false，
+// 于是代码跳过全部资金操作、却照样把订单改成"已取消 / 已退款"，
+// 造成订单显示已退款、双方余额一分未动、钱包流水里也查不到这笔退款（账实不符）。
+function readFundState(order) {
+  const payStatus = Number(order?.pay_status);
+  if (payStatus === PAY_STATUS.ESCROW) return "escrow"; // 仍在托管，未付给任何一方
+  if (payStatus === PAY_STATUS.SETTLED) return "settled"; // 已结算给接单者
+  if (payStatus === PAY_STATUS.REFUNDED) return "refunded"; // 已退回发布者
+  return "unknown";
+}
+
+// 资金划转：改余额 + 记流水，两者永远成对出现。
+// 扣回导致余额为负时直接抛错回滚整个裁决事务，
+// 而不是"订单状态改了、钱没动"——宁可明确报错，也不产生账实不符。
+function changeBalance(userId, delta, orderId, type, remark) {
+  const user = get("SELECT balance FROM users WHERE id = ?", [userId]);
+  if (!user) throw new HttpError(404, "资金划转失败：相关用户不存在");
+  const balance = Number((Number(user.balance) + Number(delta)).toFixed(2));
+  if (balance < 0) {
+    throw new HttpError(
+      409,
+      "资金划转失败：对方余额不足以完成扣回。请先与双方线下协商，再作出裁决。",
+    );
+  }
+  run("UPDATE users SET balance = ?, updated_at = ? WHERE id = ?", [balance, now(), userId]);
+  run(
+    `INSERT INTO wallet_records (user_id, order_id, type, amount, balance, remark)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [userId, orderId ?? null, type, Number(Number(delta).toFixed(2)), balance, remark],
+  );
+  return balance;
+}
 
 // 关键操作审计日志，失败不影响主流程
 function logOperation(identity, action, targetType, targetId, detail, req) {
@@ -137,74 +162,12 @@ function logOperation(identity, action, targetType, targetId, detail, req) {
         targetType,
         targetId ?? null,
         String(detail || "").slice(0, 500),
-        req?.socket?.remoteAddress || "",
+        req ? clientAddress(req) : "",
       ],
     );
   } catch (error) {
     console.warn("审计日志写入失败:", error.message);
   }
-}
-
-function maskPhone(value) {
-  const raw = String(value || "").trim();
-  const digits = raw.replace(/\D/g, "");
-  if (digits.length >= 11) {
-    return digits.replace(/(\d{3})\d{4}(\d{4})/, "$1****$2");
-  }
-  if (raw.includes("*")) return raw;
-  if (raw.length > 7) return raw.slice(0, 3) + "****" + raw.slice(-4);
-  return raw;
-}
-
-// 基于浏览者社区与任务地址的确定性距离估算（无地图服务时的就近口径）：
-// 同社区 0.2-1.4km，跨社区 1.5-2.9km；数值只用于展示与就近排序，不代表精确测距
-function estimateDistanceKm(row, viewerCommunity = "") {
-  const community = String(viewerCommunity || "").trim();
-  const target = `${row.delivery_address || ""}${row.pickup_address || ""}`;
-  if (!target) return null;
-  const sameCommunity = Boolean(community) && target.includes(community);
-  if (sameCommunity) {
-    return Number((0.2 + (Number(row.id * 37) % 13) / 10).toFixed(1));
-  }
-  return Number((1.5 + (Number(row.id * 17) % 15) / 10).toFixed(1));
-}
-
-function taskView(row, viewerId = null, canViewSensitive = false, viewerCommunity = "") {
-  if (!row) return null;
-  const canContact =
-    canViewSensitive ||
-    Boolean(
-      viewerId &&
-        (Number(viewerId) === Number(row.publisher_id) ||
-          Number(viewerId) === Number(row.acceptor_id)),
-    );
-  return {
-    ...row,
-    contact_name: canContact ? row.contact_name : row.contact_name ? "发布者" : "",
-    contact_phone: canContact ? row.contact_phone : maskPhone(row.contact_phone),
-    publisher_phone: canContact ? row.publisher_phone : maskPhone(row.publisher_phone),
-    images: parseJson(row.images),
-    completion_images: parseJson(row.completion_images),
-    distance_km: estimateDistanceKm(row, viewerCommunity),
-    same_community: Boolean(
-      viewerCommunity &&
-        `${row.delivery_address || ""}${row.pickup_address || ""}`.includes(viewerCommunity),
-    ),
-    can_accept:
-      Number(row.status) === 0 &&
-      Number(row.publisher_id) !== Number(viewerId) &&
-      Boolean(viewerId),
-    can_contact: canContact,
-  };
-}
-
-function orderView(row) {
-  if (!row) return null;
-  return {
-    ...row,
-    task_images: parseJson(row.task_images),
-    completion_images: parseJson(row.completion_images),
-  };
 }
 
 function ensureTask(id) {
@@ -290,7 +253,10 @@ async function handleApi(req, res, url) {
   if (method === "POST" && pathname === "/api/auth/login") {
     enforceRateLimit(req, "login", 30);
     const body = await parseBody(req);
-    const session = await exchangeCodeForSession(body.code, body.deviceId);
+    // 模拟登录只对本机/局域网开放，公网请求必须携带真实微信 code 走 code2Session
+    const session = await exchangeCodeForSession(body.code, body.deviceId, {
+      allowMock: isTrustedDemoRequest(req),
+    });
     const openid = session.openid.slice(0, 64);
     let user = get("SELECT * FROM users WHERE openid = ?", [openid]);
     let isNewUser = false;
@@ -399,8 +365,7 @@ async function handleApi(req, res, url) {
       newest: "t.created_at DESC",
     };
     const orderBy = sortMap[sort] || sortMap.newest;
-    const page = Math.max(1, Number(url.searchParams.get("page") || 1));
-    const pageSize = Math.min(50, Math.max(1, Number(url.searchParams.get("pageSize") || 20)));
+    const { page, pageSize } = readPagination(url);
     const orderParams = sort === "distance" ? [`%${viewerCommunity}%`, `%${viewerCommunity}%`] : [];
     const rows = all(
       `SELECT t.*, c.name AS category_name, c.icon AS category_icon, c.address_mode AS category_address_mode,
@@ -444,6 +409,18 @@ async function handleApi(req, res, url) {
     requireValue(buffer.length <= 5 * 1024 * 1024, "图片大小不能超过 5MB");
     const uploadDir = path.join(PUBLIC_DIR, "uploads");
     fs.mkdirSync(uploadDir, { recursive: true });
+    // 上传总量配额（原审计问题 #35）：原先只限"单文件 5MB + 60 次/分"，
+    // 持续调用可以打满磁盘、拖垮整个服务。这里加一道目录总量兜底。
+    const existing = fs.readdirSync(uploadDir);
+    requireValue(existing.length < MAX_UPLOAD_FILES, "上传文件数量已达上限，请联系管理员清理");
+    const usedBytes = existing.reduce((sum, name) => {
+      try {
+        return sum + fs.statSync(path.join(uploadDir, name)).size;
+      } catch {
+        return sum;
+      }
+    }, 0);
+    requireValue(usedBytes + buffer.length <= MAX_UPLOAD_BYTES, "上传空间已满，请联系管理员清理");
     const fileName = `u${Date.now()}${crypto.randomInt(1000, 9999)}.${ext}`;
     fs.writeFileSync(path.join(uploadDir, fileName), buffer);
     logOperation(identity, "upload_image", "file", null, `${fileName}, ${buffer.length}B`, req);
@@ -454,13 +431,23 @@ async function handleApi(req, res, url) {
     enforceRateLimit(req, "publish-task", 30);
     const userId = Number(identity.id);
     const body = await parseBody(req);
-    const reward = Number(body.reward);
     requireValue(body.categoryId, "请选择服务分类");
-    requireValue(String(body.title || "").trim().length >= 4, "任务标题至少 4 个字");
-    requireValue(Number.isFinite(reward) && reward >= 1 && reward <= 5000, "报酬金额需在 1-5000 元之间");
-    const user = get("SELECT * FROM users WHERE id = ?", [userId]);
-    requireValue(user.balance >= reward, "余额不足，请先充值后再发布");
+    const title = optionalText(body.title, 60);
+    requireValue(title.length >= 4, "任务标题至少 4 个字");
+    // 金额强制两位小数（原审计问题 #18：1.005 这类金额此前会被直接接受并落库）
+    const reward = readMoney(body.reward, { min: 1, max: 5000, label: "报酬金额" });
+    const images = Array.isArray(body.images) ? body.images.slice(0, 6) : [];
     const result = transaction(() => {
+      // 余额校验移入事务内（原审计问题 #15）：原实现先读余额、再开事务扣除，
+      // 在多进程部署下存在 TOCTOU 竞态，两个并发请求可同时通过校验造成透支
+      const publisher = get("SELECT * FROM users WHERE id = ?", [userId]);
+      requireValue(publisher && Number(publisher.status) === 1, "账号不存在或已被禁用");
+      // 信用分真正参与业务判断（原审计问题 #24：此前该字段从不影响任何操作）
+      requireValue(
+        Number(publisher.credit_score ?? 100) >= MIN_CREDIT_TO_TRADE,
+        `信用分低于 ${MIN_CREDIT_TO_TRADE}，暂时无法发布任务`,
+      );
+      requireValue(Number(publisher.balance) >= reward, "余额不足，请先充值后再发布");
       const taskResult = run(
         `INSERT INTO tasks (
           publisher_id, category_id, title, description, pickup_address, delivery_address,
@@ -469,31 +456,32 @@ async function handleApi(req, res, url) {
         [
           userId,
           Number(body.categoryId),
-          String(body.title).trim(),
-          String(body.description || "").trim(),
-          String(body.pickupAddress || "").trim(),
-          String(body.deliveryAddress || "").trim(),
-          String(body.contactName || user.nickname).trim(),
-          String(body.contactPhone || user.phone).trim(),
-          body.expectTime || null,
+          title,
+          optionalText(body.description, 500),
+          optionalText(body.pickupAddress, 200),
+          optionalText(body.deliveryAddress, 200),
+          optionalText(body.contactName, 32) || publisher.nickname,
+          optionalText(body.contactPhone, 20) || publisher.phone,
+          optionalText(body.expectTime, 32) || null,
           reward,
-          JSON.stringify(body.images || []),
+          JSON.stringify(images),
         ],
       );
       const taskId = Number(taskResult.lastInsertRowid);
-      const balance = Number((user.balance - reward).toFixed(2));
+      const balance = Number((Number(publisher.balance) - reward).toFixed(2));
       run("UPDATE users SET balance = ?, updated_at = ? WHERE id = ?", [balance, now(), userId]);
       run(
         `INSERT INTO wallet_records (user_id, order_id, type, amount, balance, remark)
          VALUES (?, NULL, 2, ?, ?, ?)`,
-        [userId, -reward, balance, `发布任务“${String(body.title).trim()}”托管`],
+        [userId, -reward, balance, `发布任务“${title}”托管`],
       );
       return taskId;
     });
     logOperation(identity, "publish_task", "task", result, `¥${reward}`, req);
+    const publisher = get("SELECT community FROM users WHERE id = ?", [userId]);
     return ok(
       res,
-      taskView(ensureTask(result), userId, true, user.community),
+      taskView(ensureTask(result), userId, true, publisher?.community || ""),
       "任务已发布并完成费用托管",
     );
   }
@@ -516,19 +504,37 @@ async function handleApi(req, res, url) {
       const task = get("SELECT * FROM tasks WHERE id = ?", [taskId]);
       if (!task) throw new HttpError(404, "任务不存在");
       if (task.publisher_id === acceptorId) throw new HttpError(400, "不能接取自己发布的任务");
-      if (task.status !== 0) throw new HttpError(409, "任务已被其他邻居接取");
+      // 信用分真正参与业务判断（原审计问题 #24）
+      const acceptor = get("SELECT credit_score, status FROM users WHERE id = ?", [acceptorId]);
+      requireValue(acceptor && Number(acceptor.status) === 1, "账号不存在或已被禁用");
+      requireValue(
+        Number(acceptor.credit_score ?? 100) >= MIN_CREDIT_TO_TRADE,
+        `信用分低于 ${MIN_CREDIT_TO_TRADE}，暂时无法接单`,
+      );
+      if (Number(task.status) !== TASK_STATUS.PENDING) {
+        throw new HttpError(409, "任务已被其他邻居接取");
+      }
       const changed = run(
-        `UPDATE tasks SET status = 1, acceptor_id = ?, accepted_at = ?, updated_at = ?
-         WHERE id = ? AND status = 0`,
-        [acceptorId, now(), now(), taskId],
+        `UPDATE tasks SET status = ?, acceptor_id = ?, accepted_at = ?, updated_at = ?
+         WHERE id = ? AND status = ?`,
+        [TASK_STATUS.ACCEPTED, acceptorId, now(), now(), taskId, TASK_STATUS.PENDING],
       );
       if (Number(changed.changes) !== 1) throw new HttpError(409, "任务已被其他邻居接取");
       const orderNo = createOrderNumber();
       const orderResult = run(
         `INSERT INTO orders (
           order_no, task_id, publisher_id, acceptor_id, amount, status, pay_status, pay_time
-        ) VALUES (?, ?, ?, ?, ?, 1, 1, ?)`,
-        [orderNo, taskId, task.publisher_id, acceptorId, task.reward, now()],
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          orderNo,
+          taskId,
+          task.publisher_id,
+          acceptorId,
+          task.reward,
+          ORDER_STATUS.ACCEPTED,
+          PAY_STATUS.ESCROW,
+          now(),
+        ],
       );
       createMessage(
         task.publisher_id,
@@ -559,7 +565,9 @@ async function handleApi(req, res, url) {
       const task = get("SELECT * FROM tasks WHERE id = ?", [taskId]);
       if (!task) throw new HttpError(404, "任务不存在");
       if (task.publisher_id !== userId) throw new HttpError(403, "只能取消自己发布的任务");
-      if (![0, 1].includes(task.status)) throw new HttpError(409, "当前状态不能取消");
+      if (![TASK_STATUS.PENDING, TASK_STATUS.ACCEPTED].includes(Number(task.status))) {
+        throw new HttpError(409, "当前状态不能取消");
+      }
       const user = get("SELECT balance FROM users WHERE id = ?", [userId]);
       const balance = Number((user.balance + task.reward).toFixed(2));
       run("UPDATE users SET balance = ?, updated_at = ? WHERE id = ?", [balance, now(), userId]);
@@ -569,14 +577,20 @@ async function handleApi(req, res, url) {
         [userId, task.reward, balance, `取消任务“${task.title}”退款`],
       );
       run(
-        "UPDATE tasks SET status = 5, updated_at = ? WHERE id = ?",
-        [now(), taskId],
+        "UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?",
+        [TASK_STATUS.CANCELLED, now(), taskId],
       );
       const order = get("SELECT * FROM orders WHERE task_id = ?", [taskId]);
       if (order) {
         run(
-          "UPDATE orders SET status = 4, pay_status = 3, cancel_reason = ?, updated_at = ? WHERE id = ?",
-          [String(body.reason || "发布者取消"), now(), order.id],
+          "UPDATE orders SET status = ?, pay_status = ?, cancel_reason = ?, updated_at = ? WHERE id = ?",
+          [
+            ORDER_STATUS.CANCELLED,
+            PAY_STATUS.REFUNDED,
+            optionalText(body.reason, 200) || "发布者取消",
+            now(),
+            order.id,
+          ],
         );
         createMessage(order.acceptor_id, "订单已取消", `“${task.title}”已由发布者取消。`, 3, order.id);
       }
@@ -600,28 +614,31 @@ async function handleApi(req, res, url) {
         [identity.id],
       ).total,
     };
-    return ok(res, { ...user, stats });
+    // 剥离 openid 后返回（原审计问题 #5：此前直接返回 SELECT * 整行）
+    return ok(res, { ...publicUser(user), stats });
   }
 
   if (method === "PUT" && pathname === "/api/user/profile") {
     const body = await parseBody(req);
+    const nickname = pickText(body.nickname, 32);
+    if (nickname !== null) requireValue(nickname.length > 0, "昵称不能为空");
     run(
       `UPDATE users SET nickname = COALESCE(?, nickname), avatar_url = COALESCE(?, avatar_url),
         phone = COALESCE(?, phone), community = COALESCE(?, community),
         building = COALESCE(?, building), room = COALESCE(?, room), updated_at = ?
        WHERE id = ?`,
       [
-        body.nickname ?? null,
-        body.avatarUrl ?? null,
-        body.phone ?? null,
-        body.community ?? null,
-        body.building ?? null,
-        body.room ?? null,
+        nickname,
+        pickText(body.avatarUrl, 255),
+        pickText(body.phone, 20),
+        pickText(body.community, 100),
+        pickText(body.building, 32),
+        pickText(body.room, 32),
         now(),
         identity.id,
       ],
     );
-    return ok(res, get("SELECT * FROM users WHERE id = ?", [identity.id]), "资料已更新");
+    return ok(res, publicUser(get("SELECT * FROM users WHERE id = ?", [identity.id])), "资料已更新");
   }
 
   if (method === "GET" && pathname === "/api/addresses") {
@@ -633,7 +650,11 @@ async function handleApi(req, res, url) {
 
   if (method === "POST" && pathname === "/api/addresses") {
     const body = await parseBody(req);
-    requireValue(body.contactName && body.phone && body.community, "请填写联系人、电话和社区");
+    const contactName = optionalText(body.contactName, 32);
+    const phone = optionalText(body.phone, 20);
+    const community = optionalText(body.community, 100);
+    requireValue(Boolean(contactName && phone && community), "请填写联系人、电话和社区");
+    requireValue(/^[\d+\-() ]{6,20}$/.test(phone), "联系电话格式不正确");
     const result = transaction(() => {
       if (body.isDefault) {
         run("UPDATE addresses SET is_default = 0 WHERE user_id = ?", [identity.id]);
@@ -644,12 +665,12 @@ async function handleApi(req, res, url) {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           identity.id,
-          body.contactName,
-          body.phone,
-          body.community,
-          body.building || "",
-          body.room || "",
-          body.detail || "",
+          contactName,
+          phone,
+          community,
+          optionalText(body.building, 32),
+          optionalText(body.room, 32),
+          optionalText(body.detail, 200),
           body.isDefault ? 1 : 0,
           Number(body.addressType) === 2 ? 2 : 1,
         ],
@@ -666,6 +687,11 @@ async function handleApi(req, res, url) {
       identity.id,
     ]);
     if (!address) throw new HttpError(404, "地址不存在");
+    const contactName = pickText(body.contactName, 32) ?? address.contact_name;
+    const phone = pickText(body.phone, 20) ?? address.phone;
+    const community = pickText(body.community, 100) ?? address.community;
+    requireValue(Boolean(contactName && phone && community), "请填写联系人、电话和社区");
+    requireValue(/^[\d+\-() ]{6,20}$/.test(phone), "联系电话格式不正确");
     transaction(() => {
       if (body.isDefault) {
         run("UPDATE addresses SET is_default = 0 WHERE user_id = ?", [identity.id]);
@@ -674,12 +700,12 @@ async function handleApi(req, res, url) {
         `UPDATE addresses SET contact_name = ?, phone = ?, community = ?, building = ?,
           room = ?, detail = ?, is_default = ?, address_type = ? WHERE id = ?`,
         [
-          body.contactName ?? address.contact_name,
-          body.phone ?? address.phone,
-          body.community ?? address.community,
-          body.building ?? address.building,
-          body.room ?? address.room,
-          body.detail ?? address.detail,
+          contactName,
+          phone,
+          community,
+          pickText(body.building, 32) ?? address.building,
+          pickText(body.room, 32) ?? address.room,
+          pickText(body.detail, 200) ?? address.detail,
           body.isDefault === undefined ? address.is_default : body.isDefault ? 1 : 0,
           body.addressType === undefined ? address.address_type : Number(body.addressType) === 2 ? 2 : 1,
           address.id,
@@ -707,8 +733,7 @@ async function handleApi(req, res, url) {
       where.push("o.status = ?");
       params.push(Number(status));
     }
-    const page = Math.max(1, Number(url.searchParams.get("page") || 1));
-    const pageSize = Math.min(50, Math.max(1, Number(url.searchParams.get("pageSize") || 20)));
+    const { page, pageSize } = readPagination(url);
     const total = get(
       `SELECT COUNT(*) AS total FROM orders o WHERE ${where.join(" AND ")}`,
       params,
@@ -762,11 +787,23 @@ async function handleApi(req, res, url) {
   if (method === "POST" && startMatch) {
     const order = ensureOrder(Number(startMatch[1]));
     if (order.acceptor_id !== Number(identity.id)) throw new HttpError(403, "只有接单者可以开始服务");
-    if (order.status === 5) throw new HttpError(409, "订单存在争议，已暂停操作，等待管理员处理");
-    if (order.status !== 1) throw new HttpError(409, "当前订单不能开始服务");
+    if (Number(order.status) === ORDER_STATUS.DISPUTED) {
+      throw new HttpError(409, "订单存在争议，已暂停操作，等待管理员处理");
+    }
+    if (Number(order.status) !== ORDER_STATUS.ACCEPTED) {
+      throw new HttpError(409, "当前订单不能开始服务");
+    }
     transaction(() => {
-      run("UPDATE orders SET status = 2, updated_at = ? WHERE id = ?", [now(), order.id]);
-      run("UPDATE tasks SET status = 2, updated_at = ? WHERE id = ?", [now(), order.task_id]);
+      run("UPDATE orders SET status = ?, updated_at = ? WHERE id = ?", [
+        ORDER_STATUS.IN_SERVICE,
+        now(),
+        order.id,
+      ]);
+      run("UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?", [
+        TASK_STATUS.IN_SERVICE,
+        now(),
+        order.task_id,
+      ]);
       createMessage(order.publisher_id, "订单已开始", `“${order.title}”已开始服务。`, 3, order.id);
     });
     logOperation(identity, "start_order", "order", order.id, "", req);
@@ -778,19 +815,24 @@ async function handleApi(req, res, url) {
     const body = await parseBody(req);
     const order = ensureOrder(Number(finishMatch[1]));
     if (order.acceptor_id !== Number(identity.id)) throw new HttpError(403, "只有接单者可以提交完成");
-    if (order.status === 5) throw new HttpError(409, "订单存在争议，已暂停操作，等待管理员处理");
-    if (order.status !== 2) throw new HttpError(409, "订单当前不可提交完成");
+    if (Number(order.status) === ORDER_STATUS.DISPUTED) {
+      throw new HttpError(409, "订单存在争议，已暂停操作，等待管理员处理");
+    }
+    if (Number(order.status) !== ORDER_STATUS.IN_SERVICE) {
+      throw new HttpError(409, "订单当前不可提交完成");
+    }
     const images = Array.isArray(body.images) ? body.images.slice(0, 6) : [];
     requireValue(images.length, "请至少上传一张完成凭证");
     transaction(() => {
+      // 说明（原审计问题 #29）：此处原有 "UPDATE orders SET status = 2" 是空操作——
+      // 进入本分支时订单状态本来就是 2（服务中），而"待确认"这一进度只记录在
+      // tasks.status = 3 上。为避免误导，改为只刷新 updated_at，
+      // 进度状态统一由任务表承载，订单表不再出现"看起来在改状态实际没改"的语句。
+      run("UPDATE orders SET updated_at = ? WHERE id = ?", [now(), order.id]);
       run(
-        "UPDATE orders SET status = 2, updated_at = ? WHERE id = ?",
-        [now(), order.id],
-      );
-      run(
-        `UPDATE tasks SET status = 3, finished_at = ?, completion_images = ?, updated_at = ?
+        `UPDATE tasks SET status = ?, finished_at = ?, completion_images = ?, updated_at = ?
          WHERE id = ?`,
-        [now(), JSON.stringify(images), now(), order.task_id],
+        [TASK_STATUS.AWAITING_CONFIRM, now(), JSON.stringify(images), now(), order.task_id],
       );
       createMessage(
         order.publisher_id,
@@ -808,27 +850,28 @@ async function handleApi(req, res, url) {
   if (method === "POST" && confirmMatch) {
     const order = ensureOrder(Number(confirmMatch[1]));
     if (order.publisher_id !== Number(identity.id)) throw new HttpError(403, "只有发布者可以确认完成");
-    if (order.status === 5) throw new HttpError(409, "订单存在争议，已暂停操作，等待管理员处理");
-    if (order.task_status !== 3 || order.status !== 2) throw new HttpError(409, "订单当前不可确认");
+    if (Number(order.status) === ORDER_STATUS.DISPUTED) {
+      throw new HttpError(409, "订单存在争议，已暂停操作，等待管理员处理");
+    }
+    if (Number(order.task_status) !== TASK_STATUS.AWAITING_CONFIRM || Number(order.status) !== ORDER_STATUS.IN_SERVICE) {
+      throw new HttpError(409, "订单当前不可确认");
+    }
     transaction(() => {
-      run(
-        "UPDATE orders SET status = 3, pay_status = 2, confirm_time = ?, updated_at = ? WHERE id = ?",
-        [now(), now(), order.id],
-      );
-      run("UPDATE tasks SET status = 4, updated_at = ? WHERE id = ?", [now(), order.task_id]);
-      const acceptor = get("SELECT balance FROM users WHERE id = ?", [order.acceptor_id]);
-      const income = Number((order.amount * (1 - serviceFeeRate)).toFixed(2));
-      const balance = Number((acceptor.balance + income).toFixed(2));
-      run("UPDATE users SET balance = ?, updated_at = ? WHERE id = ?", [
-        balance,
+      run("UPDATE orders SET status = ?, pay_status = ?, confirm_time = ?, updated_at = ? WHERE id = ?", [
+        ORDER_STATUS.COMPLETED,
+        PAY_STATUS.SETTLED,
         now(),
-        order.acceptor_id,
+        now(),
+        order.id,
       ]);
-      run(
-        `INSERT INTO wallet_records (user_id, order_id, type, amount, balance, remark)
-         VALUES (?, ?, 1, ?, ?, ?)`,
-        [order.acceptor_id, order.id, income, balance, `订单“${order.title}”结算`],
-      );
+      run("UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?", [
+        TASK_STATUS.COMPLETED,
+        now(),
+        order.task_id,
+      ]);
+      // 结算报酬给接单者（含手续费扣除），余额变动与流水成对写入
+      const income = Number((Number(order.amount) * (1 - serviceFeeRate)).toFixed(2));
+      changeBalance(order.acceptor_id, income, order.id, 1, `订单“${order.title}”结算`);
       createMessage(order.acceptor_id, "订单已结算", `“${order.title}”已确认完成，报酬已到账。`, 3, order.id);
     });
     logOperation(identity, "confirm_order", "order", order.id, `¥${order.amount}`, req);
@@ -840,30 +883,34 @@ async function handleApi(req, res, url) {
     const body = await parseBody(req);
     const order = ensureOrder(Number(cancelOrderMatch[1]));
     if (!canViewOrder(order, identity)) throw new HttpError(403, "无权操作该订单");
-    if (order.status === 5) throw new HttpError(409, "订单存在争议，需等待管理员处理结果");
+    if (Number(order.status) === ORDER_STATUS.DISPUTED) {
+      throw new HttpError(409, "订单存在争议，需等待管理员处理结果");
+    }
     // 接单者已提交完成凭证后，资金不能由单方取消退回，避免接单者白干；有异议走投诉
-    if (Number(order.task_status) === 3) {
+    if (Number(order.task_status) === TASK_STATUS.AWAITING_CONFIRM) {
       throw new HttpError(409, "对方已提交完成凭证，不能直接取消；如有异议请发起投诉");
     }
-    if (![1, 2].includes(order.status)) throw new HttpError(409, "当前订单不可取消");
+    if (![ORDER_STATUS.ACCEPTED, ORDER_STATUS.IN_SERVICE].includes(Number(order.status))) {
+      throw new HttpError(409, "当前订单不可取消");
+    }
     transaction(() => {
       run(
-        "UPDATE orders SET status = 4, pay_status = 3, cancel_reason = ?, updated_at = ? WHERE id = ?",
-        [String(body.reason || "双方协商取消"), now(), order.id],
+        "UPDATE orders SET status = ?, pay_status = ?, cancel_reason = ?, updated_at = ? WHERE id = ?",
+        [
+          ORDER_STATUS.CANCELLED,
+          PAY_STATUS.REFUNDED,
+          optionalText(body.reason, 200) || "双方协商取消",
+          now(),
+          order.id,
+        ],
       );
-      run("UPDATE tasks SET status = 5, updated_at = ? WHERE id = ?", [now(), order.task_id]);
-      const publisher = get("SELECT balance FROM users WHERE id = ?", [order.publisher_id]);
-      const balance = Number((publisher.balance + order.amount).toFixed(2));
-      run("UPDATE users SET balance = ?, updated_at = ? WHERE id = ?", [
-        balance,
+      run("UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?", [
+        TASK_STATUS.CANCELLED,
         now(),
-        order.publisher_id,
+        order.task_id,
       ]);
-      run(
-        `INSERT INTO wallet_records (user_id, order_id, type, amount, balance, remark)
-         VALUES (?, ?, 3, ?, ?, ?)`,
-        [order.publisher_id, order.id, order.amount, balance, `订单“${order.title}”取消退款`],
-      );
+      // 托管款退回发布者（余额变动与流水成对写入）
+      changeBalance(order.publisher_id, Number(order.amount), order.id, 3, `订单“${order.title}”取消退款`);
       createMessage(order.acceptor_id, "订单已取消", `“${order.title}”已取消。`, 3, order.id);
     });
     logOperation(identity, "cancel_order", "order", order.id, String(body.reason || ""), req);
@@ -877,7 +924,9 @@ async function handleApi(req, res, url) {
     if (!canViewOrder(order, identity) || identity.type === "admin") {
       throw new HttpError(403, "只有订单参与双方可以评价");
     }
-    if (order.status !== 3) throw new HttpError(409, "订单完成后才能评价");
+    if (Number(order.status) !== ORDER_STATUS.COMPLETED) {
+      throw new HttpError(409, "订单完成后才能评价");
+    }
     const reviewerId = Number(identity.id);
     const revieweeId =
       reviewerId === Number(order.publisher_id) ? Number(order.acceptor_id) : Number(order.publisher_id);
@@ -900,11 +949,14 @@ async function handleApi(req, res, url) {
     const avg = get("SELECT AVG(rating) AS avg_rating FROM reviews WHERE reviewee_id = ?", [
       revieweeId,
     ]).avg_rating;
+    // 信用分上限放宽到 120（原审计问题 #24）：原先初始值即 100、上限也是 100，
+    // 种子用户普遍在 95–100 分，收到好评 +1 后分数毫无变化，
+    // "好评提升信用"这条正反馈实际失效；同时信用分此前也从不参与任何业务判断。
     const creditAdjust = Number(body.rating) >= 4 ? 1 : Number(body.rating) <= 2 ? -2 : 0;
     run(
-      `UPDATE users SET credit_score = MAX(0, MIN(100, credit_score + ?)), updated_at = ?
+      `UPDATE users SET credit_score = MAX(0, MIN(?, credit_score + ?)), updated_at = ?
        WHERE id = ?`,
-      [creditAdjust, now(), revieweeId],
+      [MAX_CREDIT_SCORE, creditAdjust, now(), revieweeId],
     );
     createMessage(
       revieweeId,
@@ -944,10 +996,15 @@ async function handleApi(req, res, url) {
   if (method === "POST" && pathname === "/api/wallet/recharge") {
     enforceRateLimit(req, "wallet-recharge", 20);
     const body = await parseBody(req);
-    const amount = Number(Number(body.amount || 0).toFixed(2));
-    requireValue(Number.isFinite(amount) && amount >= 1 && amount <= 1000, "充值金额需在 1-1000 元之间");
+    const amount = readMoney(body.amount, { min: 1, max: 1000, label: "充值金额" });
     if (rechargeMode !== "mock") {
       throw new HttpError(501, "微信商户支付尚未配置，请先配置商户号和支付证书");
+    }
+    // 修复背景（原审计问题 #3）：模拟充值原本默认全开且不区分请求来源，
+    // 部署到公网后任何人无需支付即可给自己账户加钱（实测余额 145 → 1145）。
+    // 现在模拟充值只对本机 / 局域网开放，公网环境必须配置真实微信支付。
+    if (!isTrustedDemoRequest(req)) {
+      throw new HttpError(403, "模拟充值仅限本机或局域网使用；公网环境请配置真实微信支付");
     }
     const rechargeNo = `RC${Date.now()}${crypto.randomInt(10, 99)}`;
     const result = transaction(() => {
@@ -973,10 +1030,13 @@ async function handleApi(req, res, url) {
   if (method === "POST" && pathname === "/api/wallet/withdraw") {
     enforceRateLimit(req, "wallet-withdraw", 20);
     const body = await parseBody(req);
-    const amount = Number(Number(body.amount || 0).toFixed(2));
-    requireValue(Number.isFinite(amount) && amount >= 1 && amount <= 1000, "提现金额需在 1-1000 元之间");
+    const amount = readMoney(body.amount, { min: 1, max: 1000, label: "提现金额" });
     if (withdrawMode !== "mock") {
       throw new HttpError(501, "微信企业付款尚未配置，请先配置商户号和支付证书");
+    }
+    // 同充值：模拟提现只对本机 / 局域网开放（原审计问题 #3）
+    if (!isTrustedDemoRequest(req)) {
+      throw new HttpError(403, "模拟提现仅限本机或局域网使用；公网环境请配置真实微信企业付款");
     }
     const result = transaction(() => {
       const user = get("SELECT balance FROM users WHERE id = ?", [identity.id]);
@@ -1049,7 +1109,19 @@ async function handleApi(req, res, url) {
       throw new HttpError(403, "只有订单参与双方可以投诉");
     }
     requireValue(body.reason, "请选择投诉原因");
-    if (order.status === 5) throw new HttpError(409, "该订单已在争议处理中，请勿重复投诉");
+    if (Number(order.status) === ORDER_STATUS.DISPUTED) {
+      throw new HttpError(409, "该订单已在争议处理中，请勿重复投诉");
+    }
+    // 补充拦截（原审计问题 #13）：已完成订单发起投诉时不会冻结订单（status 保持 3），
+    // 而原先"请勿重复投诉"的判断只认 status === 5，对已完成订单完全失效，
+    // 导致同一订单可被反复投诉。现在按"是否已有未处理的投诉"判断，
+    // 与订单是否被冻结无关。
+    if (get("SELECT id FROM complaints WHERE order_id = ? AND status IN (0, 1) LIMIT 1", [order.id])) {
+      throw new HttpError(409, "该订单已有待处理的投诉，请勿重复提交");
+    }
+    if (Number(order.pay_status) === PAY_STATUS.REFUNDED) {
+      throw new HttpError(409, "该订单已完成退款，不能再发起投诉");
+    }
     const respondentId =
       Number(identity.id) === Number(order.publisher_id) ? order.acceptor_id : order.publisher_id;
     const images = Array.isArray(body.images) ? body.images.slice(0, 6) : [];
@@ -1062,17 +1134,22 @@ async function handleApi(req, res, url) {
           order.id,
           identity.id,
           respondentId,
-          String(body.reason),
-          String(body.description || ""),
+          optionalText(body.reason, 64),
+          optionalText(body.description, 500),
           JSON.stringify(images),
         ],
       );
-      run("UPDATE tasks SET status = 6, updated_at = ? WHERE id = ?", [now(), order.task_id]);
-      // 资金尚未结算（进行中/待确认）时冻结订单，裁决前任何一方都不能推进或取消
-      if ([1, 2].includes(Number(order.status))) {
+      run("UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?", [
+        TASK_STATUS.DISPUTED,
+        now(),
+        order.task_id,
+      ]);
+      // 资金尚未结算（进行中/待确认）时冻结订单，裁决前任何一方都不能推进或取消；
+      // 已完成订单资金早已结算给接单者，不做冻结（裁决时按"已结算"分支处理）
+      if ([ORDER_STATUS.ACCEPTED, ORDER_STATUS.IN_SERVICE].includes(Number(order.status))) {
         run(
-          "UPDATE orders SET frozen_status = status, status = 5, updated_at = ? WHERE id = ?",
-          [now(), order.id],
+          "UPDATE orders SET frozen_status = status, status = ?, updated_at = ? WHERE id = ?",
+          [ORDER_STATUS.DISPUTED, now(), order.id],
         );
       }
       createMessage(respondentId, "收到订单投诉", `订单“${order.title}”已发起投诉，等待管理员处理。`, 4, order.id);
@@ -1110,26 +1187,38 @@ async function handleApi(req, res, url) {
   }
 
   if (method === "GET" && pathname === "/api/admin/users") {
-    const keyword = url.searchParams.get("keyword") || "";
+    requireSuperAdmin(identity);
+    const keyword = optionalText(url.searchParams.get("keyword"), 64);
+    const { page, pageSize } = readPagination(url);
+    const like = `%${keyword}%`;
     // 用相关子查询统计，避免 GROUP BY u.* 在 MySQL ONLY_FULL_GROUP_BY 下报错
-    return ok(
-      res,
-      all(
-        `SELECT u.*,
-          (SELECT COUNT(*) FROM tasks t WHERE t.publisher_id = u.id) AS published_count,
-          (SELECT COUNT(*) FROM orders o WHERE o.acceptor_id = u.id) AS accepted_count
-         FROM users u
-         WHERE u.nickname LIKE ? OR u.uid LIKE ? OR u.phone LIKE ? OR u.community LIKE ?
-         ORDER BY u.id DESC`,
-        [`%${keyword}%`, `%${keyword}%`, `%${keyword}%`, `%${keyword}%`],
-      ),
-    );
+    const total = get(
+      `SELECT COUNT(*) AS total FROM users u
+       WHERE u.nickname LIKE ? OR u.uid LIKE ? OR u.phone LIKE ? OR u.community LIKE ?`,
+      [like, like, like, like],
+    ).total;
+    const list = all(
+      `SELECT u.*,
+        (SELECT COUNT(*) FROM tasks t WHERE t.publisher_id = u.id) AS published_count,
+        (SELECT COUNT(*) FROM orders o WHERE o.acceptor_id = u.id) AS accepted_count
+       FROM users u
+       WHERE u.nickname LIKE ? OR u.uid LIKE ? OR u.phone LIKE ? OR u.community LIKE ?
+       ORDER BY u.id DESC
+       LIMIT ? OFFSET ?`,
+      [like, like, like, like, pageSize, (page - 1) * pageSize],
+    ).map(publicAdminUser);
+    // 分页 + 剥离 openid（原审计问题 #4：此前一次返回全表且包含明文 openid）
+    return ok(res, { list, total, page, pageSize });
   }
 
   const adminUserMatch = pathname.match(/^\/api\/admin\/users\/(\d+)\/status$/);
   if (method === "PUT" && adminUserMatch) {
+    requireSuperAdmin(identity);
     const body = await parseBody(req);
     const targetId = Number(adminUserMatch[1]);
+    if (!get("SELECT id FROM users WHERE id = ?", [targetId])) {
+      throw new HttpError(404, "用户不存在");
+    }
     run("UPDATE users SET status = ?, updated_at = ? WHERE id = ?", [
       body.status ? 1 : 0,
       now(),
@@ -1159,14 +1248,19 @@ async function handleApi(req, res, url) {
 
   const adminTaskMatch = pathname.match(/^\/api\/admin\/tasks\/(\d+)\/status$/);
   if (method === "PUT" && adminTaskMatch) {
+    requireSuperAdmin(identity);
     const body = await parseBody(req);
     const targetId = Number(adminTaskMatch[1]);
-    run("UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?", [
-      Number(body.status),
-      now(),
-      targetId,
-    ]);
-    logOperation(identity, "set_task_status", "task", targetId, `状态 ${body.status}`, req);
+    const status = Number(body.status);
+    if (!get("SELECT id FROM tasks WHERE id = ?", [targetId])) {
+      throw new HttpError(404, "任务不存在");
+    }
+    // 枚举校验 + 资金流程保护（原审计问题 #14）：此前状态值原样落库，
+    // 既可以是任意数字，也可以把任务直接改成"已完成"，
+    // 从而绕过资金结算流程，出现"任务已完成但钱仍托管中"的账实不符。
+    assertAssignableTaskStatus(status, targetId);
+    run("UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?", [status, now(), targetId]);
+    logOperation(identity, "set_task_status", "task", targetId, `状态 ${status}`, req);
     return ok(res, null, "任务状态已更新");
   }
 
@@ -1251,12 +1345,17 @@ async function handleApi(req, res, url) {
 
   const adminComplaintMatch = pathname.match(/^\/api\/admin\/complaints\/(\d+)$/);
   if (method === "PUT" && adminComplaintMatch) {
+    requireSuperAdmin(identity);
     const body = await parseBody(req);
     const complaint = get("SELECT * FROM complaints WHERE id = ?", [Number(adminComplaintMatch[1])]);
     if (!complaint) throw new HttpError(404, "投诉记录不存在");
-    const verdict = String(body.verdict || ""); // refund 退款给发布者 / pay 结算给接单者 / reject 驳回
-    const handleResult = String(body.handleResult || "");
-    const finalStatus = Number(body.status ?? (verdict === "reject" ? 3 : verdict ? 2 : 2));
+    const verdict = optionalText(body.verdict, 16); // refund 退款给发布者 / pay 结算给接单者 / reject 驳回
+    requireValue(["", "refund", "pay", "reject"].includes(verdict), "裁决结论不合法");
+    const handleResult = optionalText(body.handleResult, 500);
+    const finalStatus = Number(
+      body.status ??
+        (verdict === "reject" ? COMPLAINT_STATUS.REJECTED : COMPLAINT_STATUS.RESOLVED),
+    );
     transaction(() => {
       run("UPDATE complaints SET status = ?, handle_result = ?, handled_at = ? WHERE id = ?", [
         finalStatus,
@@ -1267,65 +1366,68 @@ async function handleApi(req, res, url) {
       const order = get("SELECT * FROM orders WHERE id = ?", [complaint.order_id]);
       if (order && verdict) {
         const task = get("SELECT * FROM tasks WHERE id = ?", [order.task_id]);
-        const moneyFrozen = [1, 2, 5].includes(Number(order.status)) && Number(order.pay_status) === 1;
+        const orderTitle = task?.title || "";
+        // 不再用 status 猜"钱在不在托管中"，直接看支付状态这一唯一事实
+        const fundState = readFundState(order);
         if (verdict === "refund") {
-          // 投诉成立、服务未完成：托管款退回发布者
-          if (moneyFrozen) {
-            const publisher = get("SELECT balance FROM users WHERE id = ?", [order.publisher_id]);
-            const balance = Number((Number(publisher.balance) + Number(order.amount)).toFixed(2));
-            run("UPDATE users SET balance = ?, updated_at = ? WHERE id = ?", [
-              balance,
-              now(),
-              order.publisher_id,
-            ]);
-            run(
-              `INSERT INTO wallet_records (user_id, order_id, type, amount, balance, remark)
-               VALUES (?, ?, 3, ?, ?, ?)`,
-              [order.publisher_id, order.id, order.amount, balance, `投诉裁决退款“${order.title}”`],
-            );
-          }
-          run(
-            "UPDATE orders SET status = 4, pay_status = 3, frozen_status = NULL, cancel_reason = ?, updated_at = ? WHERE id = ?",
-            ["投诉裁决退款", now(), order.id],
-          );
-          run("UPDATE tasks SET status = 5, updated_at = ? WHERE id = ?", [now(), order.task_id]);
-        } else if (verdict === "pay") {
-          // 认定服务完成：托管款结算给接单者
-          if (moneyFrozen) {
-            const acceptor = get("SELECT balance FROM users WHERE id = ?", [order.acceptor_id]);
+          if (fundState === "escrow") {
+            // 服务未完成：托管款原路退回发布者
+            changeBalance(order.publisher_id, Number(order.amount), order.id, 3, `投诉裁决退款“${orderTitle}”`);
+          } else if (fundState === "settled") {
+            // 已完成订单：报酬早已结算给接单者，因此必须先把已结算金额扣回，再退给发布者。
+            // 原实现直接跳过资金操作，导致"订单显示已退款、双方余额都没动"。
             const income = Number((Number(order.amount) * (1 - serviceFeeRate)).toFixed(2));
-            const balance = Number((Number(acceptor.balance) + income).toFixed(2));
-            run("UPDATE users SET balance = ?, updated_at = ? WHERE id = ?", [
-              balance,
-              now(),
-              order.acceptor_id,
-            ]);
-            run(
-              `INSERT INTO wallet_records (user_id, order_id, type, amount, balance, remark)
-               VALUES (?, ?, 1, ?, ?, ?)`,
-              [order.acceptor_id, order.id, income, balance, `投诉裁决结算“${order.title}”`],
-            );
+            changeBalance(order.acceptor_id, -income, order.id, 2, `投诉裁决扣回“${orderTitle}”`);
+            changeBalance(order.publisher_id, Number(order.amount), order.id, 3, `投诉裁决退款“${orderTitle}”`);
+          }
+          // fundState === "refunded"：此前已退过款，保持幂等，不重复动账
+          run(
+            "UPDATE orders SET status = ?, pay_status = ?, frozen_status = NULL, cancel_reason = ?, updated_at = ? WHERE id = ?",
+            [ORDER_STATUS.CANCELLED, PAY_STATUS.REFUNDED, "投诉裁决退款", now(), order.id],
+          );
+          run("UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?", [
+            TASK_STATUS.CANCELLED,
+            now(),
+            order.task_id,
+          ]);
+        } else if (verdict === "pay") {
+          if (fundState === "refunded") {
+            throw new HttpError(409, "该订单资金已退回发布者，不能再裁决结算给接单者");
+          }
+          if (fundState === "escrow") {
+            // 认定服务完成：托管款结算给接单者（已结算过则跳过，保持幂等）
+            const income = Number((Number(order.amount) * (1 - serviceFeeRate)).toFixed(2));
+            changeBalance(order.acceptor_id, income, order.id, 1, `投诉裁决结算“${orderTitle}”`);
           }
           run(
-            "UPDATE orders SET status = 3, pay_status = 2, confirm_time = ?, frozen_status = NULL, updated_at = ? WHERE id = ?",
-            [now(), now(), order.id],
+            "UPDATE orders SET status = ?, pay_status = ?, confirm_time = ?, frozen_status = NULL, updated_at = ? WHERE id = ?",
+            [ORDER_STATUS.COMPLETED, PAY_STATUS.SETTLED, now(), order.id],
           );
-          run("UPDATE tasks SET status = 4, updated_at = ? WHERE id = ?", [now(), order.task_id]);
+          run("UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?", [
+            TASK_STATUS.COMPLETED,
+            now(),
+            order.task_id,
+          ]);
         } else if (verdict === "reject") {
-          // 驳回：恢复争议冻结前的订单/任务状态
+          // 驳回：先把订单恢复到冻结前的状态（若确实冻结过），
+          // 再依据订单与任务的事实推导任务进度。
+          //
+          // 修复背景（原审计问题 #12）：原实现把恢复逻辑整体包在
+          // if (order.frozen_status != null) 里，而"已完成订单被投诉"时订单从未被冻结
+          // （frozen_status 为 null），于是什么都不恢复——任务被投诉改成 6（争议中）后
+          // 永久卡死，与订单已完成的状态长期不一致。现在恢复逻辑不再依赖 frozen_status。
           if (order.frozen_status != null) {
-            const frozen = Number(order.frozen_status);
-            run("UPDATE orders SET status = frozen_status, frozen_status = NULL, updated_at = ? WHERE id = ?", [
-              now(),
-              order.id,
-            ]);
-            const taskStatus = frozen === 1 ? 1 : task.finished_at ? 3 : 2;
-            run("UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?", [
-              taskStatus,
-              now(),
-              order.task_id,
-            ]);
+            run(
+              "UPDATE orders SET status = frozen_status, frozen_status = NULL, updated_at = ? WHERE id = ?",
+              [now(), order.id],
+            );
           }
+          const restoredOrder = get("SELECT * FROM orders WHERE id = ?", [order.id]);
+          run("UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?", [
+            deriveTaskStatus(restoredOrder, task),
+            now(),
+            order.task_id,
+          ]);
         }
         const verdictText = { refund: "已裁决退款给发布者", pay: "已裁决结算给接单者", reject: "投诉已驳回" }[verdict];
         createMessage(complaint.complainant_id, "投诉处理结果", `${verdictText}。${handleResult}`, 4, order.id);
@@ -1359,8 +1461,7 @@ async function handleApi(req, res, url) {
   }
 
   if (method === "GET" && pathname === "/api/admin/logs") {
-    const page = Math.max(1, Number(url.searchParams.get("page") || 1));
-    const pageSize = Math.min(100, Math.max(1, Number(url.searchParams.get("pageSize") || 30)));
+    const { page, pageSize } = readPagination(url, 30, 100);
     const total = get("SELECT COUNT(*) AS total FROM operation_logs").total;
     const list = all(
       `SELECT l.*,
@@ -1393,14 +1494,29 @@ async function handleApi(req, res, url) {
 }
 
 function serveStatic(req, res, url) {
-  let pathname = decodeURIComponent(url.pathname);
+  let pathname;
+  try {
+    pathname = decodeURIComponent(url.pathname);
+  } catch {
+    // 形如 /%zz 的非法编码此前会让 decodeURIComponent 抛错并返回 500
+    res.writeHead(400);
+    return res.end("Bad Request");
+  }
+  if (pathname.includes("\0")) {
+    res.writeHead(400);
+    return res.end("Bad Request");
+  }
   if (pathname === "/") {
     res.writeHead(302, { Location: "/preview/" });
     return res.end();
   }
   if (pathname.endsWith("/")) pathname += "index.html";
   const target = path.resolve(PUBLIC_DIR, `.${pathname}`);
-  if (!target.startsWith(PUBLIC_DIR)) {
+  // 路径边界校验（原审计问题 #8）：原先用 target.startsWith(PUBLIC_DIR)，
+  // 缺少路径分隔符边界，public 的兄弟目录（如 public-backup）会被误判为"位于 public 内"
+  // 而被越权读取。改用 path.relative 判断目标是否真的落在 PUBLIC_DIR 之下。
+  const relative = path.relative(PUBLIC_DIR, target);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
     res.writeHead(403);
     return res.end("Forbidden");
   }
@@ -1424,8 +1540,16 @@ function serveStatic(req, res, url) {
 }
 
 const server = http.createServer(async (req, res) => {
+  // CORS 来源在此一次性判定（原审计问题 #9：此前所有响应统一 Access-Control-Allow-Origin: *），
+  // 由 sendJson 按 res.corsOrigin 决定是否下发 CORS 头
+  res.corsOrigin = resolveCorsOrigin(req);
   if (req.method === "OPTIONS") return sendJson(res, 204, {});
-  const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+  let url;
+  try {
+    url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+  } catch {
+    return sendJson(res, 400, { code: 400, msg: "请求地址无效", data: null });
+  }
   try {
     if (url.pathname.startsWith("/api/")) {
       return await handleApi(req, res, url);
@@ -1442,9 +1566,15 @@ server.listen(PORT, HOST, () => {
   console.log(`阳光社区邻里快办服务已启动: http://localhost:${PORT}`);
   console.log(`移动端预览: http://localhost:${PORT}/preview/`);
   console.log(`管理后台: http://localhost:${PORT}/admin/`);
+  console.log(`JWT 密钥来源: ${SECRET_SOURCE}`);
   if (isMockLoginEnabled()) {
-    console.warn("微信登录当前为本地模拟模式；生产环境请配置微信小程序密钥");
+    console.warn("微信登录当前为本地模拟模式");
+    console.warn("模拟登录与模拟充值仅对本机/局域网开放，来自公网的请求会被拒绝");
+    console.warn("正式部署请按 docs/DEPLOYMENT.md 配置微信小程序密钥与 JWT_SECRET");
   } else {
     console.log(`微信登录: ${isWeChatConfigured() ? "code2Session 正式模式" : "等待配置"}`);
+  }
+  if (HOST === "0.0.0.0") {
+    console.log("监听地址: 0.0.0.0（局域网内可访问，用于手机真机演示）；如需仅本机可访问请设置 HOST=127.0.0.1");
   }
 });

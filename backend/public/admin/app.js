@@ -276,7 +276,8 @@ async function renderDashboard(content) {
 
 async function renderUsers(content) {
   const keyword = state.data.userKeyword || "";
-  const users = await api(`/api/admin/users?keyword=${encodeURIComponent(keyword)}`);
+  const data = await api(`/api/admin/users?keyword=${encodeURIComponent(keyword)}`);
+  const users = data.list || [];
   state.data.users = users;
   content.innerHTML = `
     <div class="page-head">

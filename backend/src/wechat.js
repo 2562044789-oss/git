@@ -55,13 +55,27 @@ function wechatError(payload) {
   return new WeChatAuthError(502, "微信登录服务暂时不可用，请稍后再试");
 }
 
-async function exchangeCodeForSession(code, deviceId = "") {
+// options.allowMock：本次请求是否允许走本地模拟登录。
+//
+// 修复背景（原审计问题 #2）：模拟登录默认全开，且不区分请求来源，
+// 部署到公网后 POST /api/auth/login {"code":"demo-user"} 即可免授权登录任意演示账号。
+// 现在由调用方（server.js）按请求来源决定——本机/局域网允许，公网拒绝。
+async function exchangeCodeForSession(code, deviceId = "", options = {}) {
+  const { allowMock = true } = options;
   const jsCode = String(code || "").trim();
   if (!jsCode) throw new WeChatAuthError(400, "缺少微信登录 code");
   if (jsCode.length > 128) throw new WeChatAuthError(400, "微信登录 code 无效");
 
   validateWeChatConfiguration();
-  if (isMockLoginEnabled()) return mockSession(jsCode, deviceId);
+  if (isMockLoginEnabled()) {
+    if (!allowMock) {
+      throw new WeChatAuthError(
+        403,
+        "模拟登录仅限本机或局域网调试使用；公网环境请配置 WECHAT_APP_ID / WECHAT_APP_SECRET",
+      );
+    }
+    return mockSession(jsCode, deviceId);
+  }
   if (!isWeChatConfigured()) {
     throw new WeChatAuthError(500, "微信登录尚未配置");
   }

@@ -537,6 +537,30 @@ function migrateZeroInitialBalances(isFreshSeed = false) {
     run("INSERT INTO app_settings (key, value) VALUES (?, ?)", [migrationKey, "done"]);
     return;
   }
+  // 安全检查（原审计问题 #19）：原实现无条件执行
+  //   UPDATE users SET balance = 0; DELETE FROM wallet_records;
+  // 一旦在已有真实交易的库上误触发，会清空全部用户余额与资金流水且不可恢复。
+  // 现在只要库中出现任何真实资金痕迹，就只登记标记、绝不执行清零。
+  const activity = get(`
+    SELECT
+      (SELECT COUNT(*) FROM orders WHERE pay_status IN (2, 3) OR status IN (3, 4)) AS settled_orders,
+      (SELECT COUNT(*) FROM complaints) AS complaints,
+      (SELECT COUNT(*) FROM reviews) AS reviews,
+      (SELECT COUNT(*) FROM recharge_orders) AS recharges,
+      (SELECT COUNT(*) FROM withdraw_orders) AS withdraws
+  `);
+  const hasRealActivity = Object.values(activity || {}).some((count) => Number(count) > 0);
+  if (hasRealActivity) {
+    console.warn(
+      "[迁移] 跳过 zero_initial_balance_v1：检测到库中已有真实交易记录，为避免清空余额与流水不执行清零。",
+      JSON.stringify(activity),
+    );
+    run("INSERT INTO app_settings (key, value) VALUES (?, ?)", [
+      migrationKey,
+      `skipped:${JSON.stringify(activity)}`,
+    ]);
+    return;
+  }
   transaction(() => {
     run("UPDATE users SET balance = 0");
     run("DELETE FROM wallet_records");

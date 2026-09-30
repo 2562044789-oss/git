@@ -23,8 +23,46 @@ node --no-warnings src/server.js
 未配置微信密钥时，本地开发环境自动使用模拟登录。正式环境必须配置
 `WECHAT_APP_ID` 和 `WECHAT_APP_SECRET`，否则服务会拒绝启动。小程序
 `wx.login` 返回的 code 只能使用一次，不能作为长期用户标识；用户身份以
-后端换取的 `openid` 为准。设置 `NODE_ENV=production` 时还必须显式配置
-`JWT_SECRET`（随机长密钥），否则服务同样拒绝启动，避免使用代码内置的开发默认值。
+后端换取的 `openid` 为准。
+
+## 环境变量一览
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `PORT` | `3000` | 监听端口 |
+| `HOST` | `0.0.0.0` | 监听地址。默认允许局域网访问（手机真机演示用）；仅本机可访问请设为 `127.0.0.1` |
+| `JWT_SECRET` | 自动生成 | 令牌签名密钥。**代码中已不再有任何硬编码默认值**：未配置时首次运行会在 `backend/data/jwt-secret.key` 随机生成并落盘，也可用 `JWT_SECRET_FILE` 指定其他路径。显式配置时长度需 ≥16 位 |
+| `SERVICE_FEE_RATE` | `0` | 平台手续费率，`0.05` 表示 5% |
+| `WECHAT_APP_ID` / `WECHAT_APP_SECRET` | 空 | 微信小程序密钥，必须同时配置 |
+| `WECHAT_MOCK_LOGIN` | 自动 | 是否启用模拟登录。`1` 强制开启、`0` 强制关闭；未设置时在"非生产环境且未配置微信密钥"下自动开启 |
+| `WECHAT_PAY_MODE` | `mock` | 充值模式。`mock` 为模拟充值，其他值返回 501 |
+| `WECHAT_TRANSFER_MODE` | `mock` | 提现模式，同上 |
+| `CORS_ORIGINS` | 空 | 允许跨域的来源，逗号分隔。**默认不再下发 `Access-Control-Allow-Origin: *`**；同源请求与本机开发地址（localhost / 127.0.0.1 任意端口）始终放行 |
+| `TRUST_PROXY` | 关闭 | 设为 `1` 时才采用 `X-Forwarded-For` 作为限流标识；在 Nginx 等反向代理之后部署时应开启 |
+| `ALLOW_INSECURE_DEMO` | 关闭 | 设为 `1` 时解除"演示后门仅限本机/局域网"的限制。**仅供本机调试，公网开启等同于把管理员权限交给所有人** |
+
+## 演示后门与公网安全
+
+模拟登录（`code: "demo-user"`）与模拟充值 / 提现属于演示用的后门能力。修复后
+**只对本机与局域网来源开放**：判断依据是 TCP 连接来源地址（回环 + RFC1918 私有网段），
+并且只要请求携带任何代理转发头（`X-Forwarded-For`、`X-Real-IP`、`Forwarded` 等）
+就一律视为非本机来源。
+
+因此：
+
+- 浏览器预览页、手机真机（走局域网 IP）演示**完全不受影响**；
+- 一旦按下方 Nginx 示例部署到公网，模拟登录与模拟充值会**自动失效**，无需额外配置；
+- 若确需在公网环境演示，只能显式设置 `ALLOW_INSECURE_DEMO=1`，风险自负。
+
+## 上线前检查清单
+
+- [ ] 配置 `WECHAT_APP_ID` / `WECHAT_APP_SECRET`（模拟登录将自动关闭）
+- [ ] 配置 `WECHAT_PAY_MODE` / `WECHAT_TRANSFER_MODE` 为真实支付渠道
+- [ ] 视情况显式配置 `JWT_SECRET`，并妥善保管 `backend/data/jwt-secret.key`
+- [ ] 按需设置 `CORS_ORIGINS`，不要使用 `*`
+- [ ] 反向代理后设置 `TRUST_PROXY=1`，否则限流会对所有用户共用一个计数桶
+- [ ] 确认 `HOST`（默认 `0.0.0.0` 会监听全部网卡）
+- [ ] 核对 `sqlite` 中 `balance` / `reward` / `amount` 仍为浮点类型，如需正式承载资金建议迁移为整数分存储
 
 ## MySQL 8.0
 

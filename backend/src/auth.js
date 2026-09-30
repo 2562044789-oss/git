@@ -1,12 +1,57 @@
 const crypto = require("node:crypto");
+const fs = require("node:fs");
+const path = require("node:path");
 
-const SECRET = process.env.JWT_SECRET || "sunshine-community-dev-secret";
 const TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 
-// 生产环境必须显式配置随机 JWT 密钥，避免使用公开的开发默认值
-if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
-  throw new Error("生产环境必须通过环境变量 JWT_SECRET 配置随机长密钥");
+// JWT 密钥来源（按优先级）：
+//   1. 环境变量 JWT_SECRET
+//   2. 本地持久化密钥文件（首次运行自动生成）
+//
+// 修复背景（原审计问题 #1）：原先写作
+//   const SECRET = process.env.JWT_SECRET || "sunshine-community-dev-secret";
+//   if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) throw ...
+// 也就是——先声明是生产环境才做检查。不声明就静默使用源码里公开的默认密钥，
+// 任何人都能用它自签一个 {id:1,type:"admin"} 令牌直接拿到管理员权限。
+// 现在彻底移除硬编码默认值：没有配置就随机生成并落盘，攻击者无从得知密钥；
+// 同时保持"零配置启动"，本地演示与答辩演示不受影响。
+function resolveSecretFile() {
+  const explicit = String(process.env.JWT_SECRET_FILE || "").trim();
+  if (explicit) return explicit;
+  const databasePath = String(process.env.DATABASE_PATH || "").trim();
+  if (databasePath) return path.join(path.dirname(path.resolve(databasePath)), "jwt-secret.key");
+  return path.join(__dirname, "..", "data", "jwt-secret.key");
 }
+
+function loadSecret() {
+  const fromEnv = String(process.env.JWT_SECRET || "").trim();
+  if (fromEnv) {
+    if (fromEnv.length < 16) {
+      throw new Error("JWT_SECRET 长度不足，请配置至少 16 位的随机密钥");
+    }
+    if (fromEnv === "sunshine-community-dev-secret") {
+      throw new Error("检测到源码中公开的示例密钥，请更换为随机密钥后再启动");
+    }
+    return { value: fromEnv, source: "环境变量 JWT_SECRET" };
+  }
+
+  const secretFile = resolveSecretFile();
+  try {
+    const existing = fs.readFileSync(secretFile, "utf8").trim();
+    if (existing.length >= 32) {
+      return { value: existing, source: `本地密钥文件 ${secretFile}` };
+    }
+  } catch {
+    // 文件不存在或不可读 → 走首次生成流程
+  }
+
+  const generated = crypto.randomBytes(32).toString("hex");
+  fs.mkdirSync(path.dirname(secretFile), { recursive: true });
+  fs.writeFileSync(secretFile, generated, { mode: 0o600 });
+  return { value: generated, source: `首次运行自动生成 ${secretFile}` };
+}
+
+const { value: SECRET, source: SECRET_SOURCE } = loadSecret();
 
 function encode(value) {
   return Buffer.from(value).toString("base64url");
@@ -67,6 +112,7 @@ function verifyPassword(password, stored) {
 }
 
 module.exports = {
+  SECRET_SOURCE,
   hashPassword,
   signToken,
   verifyPassword,
