@@ -36,11 +36,11 @@ function check(label, condition, detail = "") {
 }
 
 // ---- 预览端：把轮播的文案与标记函数真求值 ----
-// 切片从 ACCEPTOR_AD_TEXT 开始，因为 heroSlides() 复用了 acceptorAdCopy() 的 CTA。
+// 切片从 ACCEPTOR_AD_CTA 开始，因为 heroSlides() 复用了 acceptorCta() 的按钮文案。
 const previewSource = fs.readFileSync(previewApp, "utf8");
 const previewSnippet = extract(
   previewSource,
-  "const ACCEPTOR_AD_TEXT",
+  "const ACCEPTOR_AD_CTA",
   "function statusMeta(",
 );
 // 顶替模块作用域里的 acceptorOf（读认证状态）与 escapeHtml

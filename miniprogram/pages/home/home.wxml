@@ -49,7 +49,7 @@
     </swiper-item>
 
     <!-- 第 2 张：接单员招募。按钮文案跟认证进度走（已认证的人给"查看权益"，
-         不该再劝他去申请），文案和下方滚动条同源，避免两处口径不一致。 -->
+         不该再劝他去申请），CTA 文案与认证页口径一致。 -->
     <swiper-item>
       <view class="hero-band hero-band-earn">
         <view class="hero-glyph">¥</view>
@@ -93,22 +93,6 @@
       wx:key="*this"
       class="hero-dot {{heroIndex === item ? 'active' : ''}}"
     ></view>
-  </view>
-
-  <!-- 接单员招募滚动条：紧贴"发布跑腿"下方。
-       只能发单不能接单的用户，最容易在这里被引导去认证。 -->
-  <view class="acceptor-ad" hover-class="acceptor-ad-hover" bindtap="goAcceptor">
-    <view class="acceptor-ad-badge">接单员招募</view>
-    <view class="acceptor-ad-window">
-      <!-- 文字放两份、整体左移到 -50%，首尾正好衔接，形成无缝循环 -->
-      <view class="acceptor-ad-track">
-        <text class="acceptor-ad-text">{{acceptorAd.text}}</text>
-        <text class="acceptor-ad-text">{{acceptorAd.text}}</text>
-      </view>
-      <view class="acceptor-ad-fade left"></view>
-      <view class="acceptor-ad-fade right"></view>
-    </view>
-    <view class="acceptor-ad-cta">{{acceptorAd.cta}} ›</view>
   </view>
 
   <view wx:if="{{announcements.length}}" class="announcement-row">
