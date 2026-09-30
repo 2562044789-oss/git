@@ -70,6 +70,39 @@ function acceptorMenuSubtitle() {
   return info.status_text || ACCEPTOR_STATUS_TEXT[Number(info.status)] || "未认证";
 }
 
+// 首页「成为接单员」滚动广告的文案，按认证进度分档。
+// 已认证的人不该再被反复劝去申请，改成告知保证金托管状态。
+const ACCEPTOR_AD_TEXT = {
+  0: "成为接单员，顺路接单赚报酬 · 实名认证 + 保证金 ¥{deposit}（退出可退）· 点这里立即申请",
+  1: "接单员认证资料已提交，管理员审核中 · 通过后缴纳保证金 ¥{deposit} 即可开始接单",
+  2: "认证已通过，还差最后一步 · 缴纳保证金 ¥{deposit} 就能开始接单",
+  3: "你已是认证接单员 · 保证金 ¥{deposit} 由平台托管，退出接单员时原路退回",
+  4: "接单员认证未通过 · 在认证面板修改资料后可重新提交审核",
+  5: "你已退出接单员 · 重新认证并缴纳保证金 ¥{deposit} 后可继续接单",
+};
+
+const ACCEPTOR_AD_CTA = {
+  0: "立即申请",
+  1: "查看进度",
+  2: "去缴纳",
+  3: "查看权益",
+  4: "重新提交",
+  5: "重新认证",
+};
+
+// 取不到认证信息时按"未认证"处理，与后端 fail-closed 的口径一致。
+function acceptorAdCopy() {
+  const info = acceptorOf();
+  const status = info ? Number(info.status || 0) : 0;
+  const deposit = Number(info?.required_deposit || 50)
+    .toFixed(2)
+    .replace(/\.00$/, "");
+  return {
+    text: (ACCEPTOR_AD_TEXT[status] || ACCEPTOR_AD_TEXT[0]).replace("{deposit}", deposit),
+    cta: ACCEPTOR_AD_CTA[status] || ACCEPTOR_AD_CTA[0],
+  };
+}
+
 function statusMeta(status, kind = "task") {
   const taskMap = {
     0: ["待接单", "green"],
@@ -221,6 +254,26 @@ function renderHome() {
           <div class="hero-tree"></div>
         </div>
       </section>
+
+      ${
+        (() => {
+          // 接单员招募滚动条：紧贴"发布跑腿"下方。
+          // 只能发单、不能接单的用户，最容易在这里被引导去认证。
+          const ad = acceptorAdCopy();
+          return `<button class="acceptor-ad" data-action="acceptor">
+              <span class="acceptor-ad-badge">接单员招募</span>
+              <span class="acceptor-ad-window">
+                <span class="acceptor-ad-track">
+                  <span class="acceptor-ad-text">${escapeHtml(ad.text)}</span>
+                  <span class="acceptor-ad-text" aria-hidden="true">${escapeHtml(ad.text)}</span>
+                </span>
+                <i class="acceptor-ad-fade left"></i>
+                <i class="acceptor-ad-fade right"></i>
+              </span>
+              <span class="acceptor-ad-cta">${escapeHtml(ad.cta)} ›</span>
+            </button>`;
+        })()
+      }
 
       ${
         announcement

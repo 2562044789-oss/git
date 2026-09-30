@@ -1260,3 +1260,107 @@ button {
     border-left: 1px solid rgba(78, 121, 92, 0.12);
   }
 }
+
+/* 首页接单员招募滚动条。
+   底色用品牌绿实色（不是渐变）：左右两侧的渐隐遮罩要能和背景完全对上，
+   用渐变背景会出现接缝。它比下方的白色公告条更抢眼，但不能压过主 CTA。 */
+.acceptor-ad {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 15px;
+  color: #fff;
+  background: #3f9d69;
+  box-shadow: 0 10px 20px rgba(63, 157, 105, 0.18);
+  cursor: pointer;
+  text-align: left;
+}
+
+.acceptor-ad:active {
+  opacity: 0.92;
+}
+
+.acceptor-ad-badge {
+  flex: none;
+  padding: 3px 9px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.2);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.acceptor-ad-window {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  overflow: hidden;
+}
+
+/* 文字放两份，整体左移到 -50% 时第二份刚好接上第一份，形成无缝循环 */
+.acceptor-ad-track {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  animation: acceptor-ad-scroll 22s linear infinite;
+}
+
+.acceptor-ad-text {
+  flex: none;
+  padding-right: 48px;
+  font-size: 12px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+@keyframes acceptor-ad-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* 尊重系统的"减少动态效果"设置：文字静止，其余样式不变 */
+@media (prefers-reduced-motion: reduce) {
+  .acceptor-ad-track {
+    animation: none;
+  }
+}
+
+.acceptor-ad-fade {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 18px;
+  pointer-events: none;
+}
+
+.acceptor-ad-fade.left {
+  left: 0;
+  background: linear-gradient(90deg, #3f9d69 0%, rgba(63, 157, 105, 0) 100%);
+}
+
+.acceptor-ad-fade.right {
+  right: 0;
+  background: linear-gradient(270deg, #3f9d69 0%, rgba(63, 157, 105, 0) 100%);
+}
+
+.acceptor-ad-cta {
+  flex: none;
+  padding: 3px 11px;
+  border-radius: 999px;
+  color: #2f7d52;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 800;
+}
