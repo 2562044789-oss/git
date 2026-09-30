@@ -66,6 +66,11 @@
     </view>
   </view>
 
+  <view wx:if="{{task.accept_blocked_reason}}" class="certify-tip">
+    <text class="certify-tip-text">{{task.accept_blocked_reason}}</text>
+    <text class="certify-tip-link" bindtap="goCertify">去认证 ›</text>
+  </view>
+
   <view class="bottom-action safe-bottom">
     <button class="contact-button {{task.can_contact ? '' : 'disabled'}}" bindtap="contactPublisher">
       {{task.can_contact ? '查看联系方式' : '接单后可见'}}
@@ -78,6 +83,13 @@
       bindtap="acceptTask"
     >
       立即接单
+    </button>
+    <button
+      wx:elif="{{task.accept_blocked_reason}}"
+      class="primary-button accept-button"
+      bindtap="goCertify"
+    >
+      去认证后接单
     </button>
     <button
       wx:elif="{{isPublisher && (task.status === 0 || task.status === 1)}}"

@@ -19,14 +19,22 @@ const {
 } = require("./http");
 const { clientAddress, isTrustedDemoRequest } = require("./network");
 const {
+  ACCEPTOR_STATUS,
+  ACCEPTOR_STATUS_LABEL,
   COMPLAINT_STATUS,
+  DEPOSIT_STATUS,
   ORDER_STATUS,
   PAY_STATUS,
   TASK_STATUS,
   TASK_STATUS_VALUES,
+  WALLET_TYPE,
   deriveTaskStatus,
+  describeAcceptorBlocker,
+  isAcceptorActive,
 } = require("./status");
 const {
+  acceptorView,
+  maskIdCard,
   orderView,
   publicAdminUser,
   publicUser,
@@ -55,6 +63,12 @@ const MIN_CREDIT_TO_TRADE = 60;
 // 上传目录总量配额，防止"单文件 5MB + 高频调用"持续打满磁盘
 const MAX_UPLOAD_FILES = 500;
 const MAX_UPLOAD_BYTES = 200 * 1024 * 1024;
+// 接单员保证金金额。接单意味着"平台把交付责任交给这个人"，
+// 因此需要先实名认证再缴纳一笔可退还的保证金，用于约束履约。
+const ACCEPTOR_DEPOSIT_AMOUNT = Number(process.env.ACCEPTOR_DEPOSIT || 50);
+// 身份证校验位算法（GB 11643-1999）
+const ID_CARD_WEIGHTS = [7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2];
+const ID_CARD_CHECK_CHARS = "10X98765432";
 
 function authenticate(req, adminOnly = false) {
   const header = req.headers.authorization || "";
@@ -78,6 +92,80 @@ function authenticate(req, adminOnly = false) {
 // 既无长度上限也未清洗的问题（原审计问题 #10）。
 function pickText(value, maxLength) {
   return value === undefined || value === null ? null : optionalText(value, maxLength);
+}
+
+// 身份证号校验：18 位、出生日期真实存在、校验位符合 GB 11643-1999。
+// 只校验"格式与校验位"是行业通行做法——无法也不应在本系统内联网核验真伪，
+// 真实核验依赖管理员比对上传的证件照片。
+function readIdCardNo(value) {
+  const raw = String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s/g, "");
+  requireValue(/^\d{17}[\dX]$/.test(raw), "身份证号格式不正确，应为 18 位");
+  const year = Number(raw.slice(6, 10));
+  const month = Number(raw.slice(10, 12));
+  const day = Number(raw.slice(12, 14));
+  const birth = new Date(year, month - 1, day);
+  requireValue(
+    year >= 1900 &&
+      year <= new Date().getFullYear() &&
+      birth.getFullYear() === year &&
+      birth.getMonth() === month - 1 &&
+      birth.getDate() === day,
+    "身份证号中的出生日期不正确",
+  );
+  let sum = 0;
+  for (let index = 0; index < 17; index += 1) {
+    sum += Number(raw[index]) * ID_CARD_WEIGHTS[index];
+  }
+  requireValue(
+    ID_CARD_CHECK_CHARS[sum % 11] === raw[17],
+    "身份证号校验位不正确，请核对后重新输入",
+  );
+  return raw;
+}
+
+// 手机号校验：只接受中国大陆 11 位手机号
+function readPhoneNumber(value, label = "手机号") {
+  const raw = String(value ?? "")
+    .trim()
+    .replace(/[\s-]/g, "");
+  requireValue(/^1[3-9]\d{9}$/.test(raw), `${label}格式不正确，请输入 11 位手机号`);
+  return raw;
+}
+
+// 接单员资料查询
+function findAcceptorProfile(userId) {
+  return get("SELECT * FROM acceptor_profiles WHERE user_id = ?", [userId]) || null;
+}
+
+// 接单资格门：接单接口与任务视图共用同一套判断，避免两处口径不一致。
+// 判定条件集中在 status.js 的 isAcceptorActive()，即"审核通过 + 保证金在托管中"。
+function acceptorGate(userId) {
+  const profile = findAcceptorProfile(userId);
+  const canAccept = isAcceptorActive(profile);
+  return {
+    profile,
+    canAccept,
+    blockedReason: canAccept ? "" : describeAcceptorBlocker(profile),
+    summary: {
+      required_deposit: ACCEPTOR_DEPOSIT_AMOUNT,
+      status: profile ? Number(profile.status) : ACCEPTOR_STATUS.NONE,
+      status_text:
+        ACCEPTOR_STATUS_LABEL[profile ? Number(profile.status) : ACCEPTOR_STATUS.NONE],
+      deposit_status: profile ? Number(profile.deposit_status) : DEPOSIT_STATUS.UNPAID,
+      can_accept: canAccept,
+      blocked_reason: canAccept ? "" : describeAcceptorBlocker(profile),
+    },
+  };
+}
+
+// 接单准入：这是"未认证用户只能发布任务、不能接单"这条业务规则的唯一执行点。
+function assertAcceptorActive(userId) {
+  const gate = acceptorGate(userId);
+  if (!gate.canAccept) throw new HttpError(403, gate.blockedReason);
+  return gate.profile;
 }
 
 // 破坏性操作（资金裁决、停用账号等）要求超级管理员身份。
@@ -340,6 +428,7 @@ async function handleApi(req, res, url) {
       service_fee_rate: serviceFeeRate,
       recharge_mode: rechargeMode,
       withdraw_mode: withdrawMode,
+      acceptor_deposit: ACCEPTOR_DEPOSIT_AMOUNT,
       announcements,
     });
   }
@@ -354,6 +443,13 @@ async function handleApi(req, res, url) {
       ? get("SELECT community FROM users WHERE id = ?", [viewerId])
       : null;
     const viewerCommunity = viewer?.community || "";
+    // 任务列表里就带上接单资格：未认证的用户看到的是"去认证"引导，
+    // 而不是点下接单按钮才收到 403
+    const gate = viewerId ? acceptorGate(viewerId) : null;
+    const acceptorArg = {
+      canAccept: Boolean(gate?.canAccept),
+      blockedReason: gate?.blockedReason || "",
+    };
     const { where, params } = buildTaskWhere(url, viewerId);
     const sort = url.searchParams.get("sort");
     const sortMap = {
@@ -383,7 +479,7 @@ async function handleApi(req, res, url) {
       params,
     ).total;
     return ok(res, {
-      list: rows.map((row) => taskView(row, viewerId, false, viewerCommunity)),
+      list: rows.map((row) => taskView(row, viewerId, false, viewerCommunity, acceptorArg)),
       total,
       page,
       pageSize,
@@ -492,7 +588,14 @@ async function handleApi(req, res, url) {
     const viewer = identity?.type === "user"
       ? get("SELECT community FROM users WHERE id = ?", [identity.id])
       : null;
-    return ok(res, taskView(ensureTask(id), identity?.id, false, viewer?.community || ""));
+    const gate = identity?.type === "user" ? acceptorGate(identity.id) : null;
+    return ok(
+      res,
+      taskView(ensureTask(id), identity?.id, false, viewer?.community || "", {
+        canAccept: Boolean(gate?.canAccept),
+        blockedReason: gate?.blockedReason || "",
+      }),
+    );
   }
 
   const acceptMatch = pathname.match(/^\/api\/tasks\/(\d+)\/accept$/);
@@ -504,6 +607,9 @@ async function handleApi(req, res, url) {
       const task = get("SELECT * FROM tasks WHERE id = ?", [taskId]);
       if (!task) throw new HttpError(404, "任务不存在");
       if (task.publisher_id === acceptorId) throw new HttpError(400, "不能接取自己发布的任务");
+      // 接单员准入门槛：必须已完成实名认证并缴纳保证金。
+      // 未认证的用户仍然可以发布任务，但只能发布、不能接单。
+      assertAcceptorActive(acceptorId);
       // 信用分真正参与业务判断（原审计问题 #24）
       const acceptor = get("SELECT credit_score, status FROM users WHERE id = ?", [acceptorId]);
       requireValue(acceptor && Number(acceptor.status) === 1, "账号不存在或已被禁用");
@@ -615,7 +721,9 @@ async function handleApi(req, res, url) {
       ).total,
     };
     // 剥离 openid 后返回（原审计问题 #5：此前直接返回 SELECT * 整行）
-    return ok(res, { ...publicUser(user), stats });
+    // 同时带上接单资格摘要，个人中心据此展示"已认证 / 去认证"入口
+    const gate = acceptorGate(identity.id);
+    return ok(res, { ...publicUser(user), stats, acceptor: gate.summary });
   }
 
   if (method === "PUT" && pathname === "/api/user/profile") {
@@ -1071,6 +1179,245 @@ async function handleApi(req, res, url) {
     });
   }
 
+  // ------------------------------------------------------------ 接单员认证
+
+  // 查询自己的接单员认证状态。未提交过申请时同样返回 200（status = 0），
+  // 让前端不必区分"没有记录"和"状态是未认证"两种情况。
+  if (method === "GET" && pathname === "/api/acceptor/profile") {
+    const gate = acceptorGate(identity.id);
+    return ok(res, {
+      ...gate.summary,
+      profile: acceptorView(gate.profile),
+    });
+  }
+
+  // 提交 / 重新提交实名认证申请
+  if (method === "POST" && pathname === "/api/acceptor/apply") {
+    enforceRateLimit(req, "acceptor-apply", 10);
+    const userId = Number(identity.id);
+    const body = await parseBody(req);
+    const realName = optionalText(body.realName, 32);
+    requireValue(/^[\u4e00-\u9fa5·]{2,32}$/.test(realName), "真实姓名需填写 2 个字以上的中文姓名");
+    const idCardNo = readIdCardNo(body.idCardNo);
+    const phone = readPhoneNumber(body.phone, "联系手机号");
+    const idCardFront = optionalText(body.idCardFront, 255);
+    const idCardBack = optionalText(body.idCardBack, 255);
+    requireValue(
+      Boolean(idCardFront && idCardBack),
+      "请上传身份证正面与反面照片，用于管理员核验",
+    );
+    const emergencyContact = optionalText(body.emergencyContact, 64);
+    const current = findAcceptorProfile(userId);
+    if (current) {
+      const status = Number(current.status);
+      if (status === ACCEPTOR_STATUS.ACTIVE) {
+        throw new HttpError(409, "你已通过接单员认证，无需重复提交");
+      }
+      if (status === ACCEPTOR_STATUS.REVIEWING) {
+        throw new HttpError(409, "实名认证正在审核中，请等待审核结果");
+      }
+    }
+    // 同一身份证号只允许绑定一个账号：防止同一人开多个接单账号刷单、规避保证金
+    const occupied = get("SELECT user_id FROM acceptor_profiles WHERE id_card_no = ?", [idCardNo]);
+    if (occupied && Number(occupied.user_id) !== userId) {
+      throw new HttpError(409, "该身份证号已绑定其他账号，如有疑问请联系社区管理员");
+    }
+    const user = get("SELECT nickname, community FROM users WHERE id = ?", [userId]);
+    transaction(() => {
+      if (current) {
+        // 重新提交时清空上一次的审核结论与保证金状态
+        run(
+          `UPDATE acceptor_profiles SET
+            real_name = ?, id_card_no = ?, id_card_front = ?, id_card_back = ?, phone = ?,
+            community = ?, emergency_contact = ?, status = ?, review_note = '',
+            reviewed_by = NULL, reviewed_at = NULL,
+            deposit_amount = ?, deposit_status = ?, deposit_paid_at = NULL, deposit_refunded_at = NULL,
+            applied_at = ?, updated_at = ?
+           WHERE user_id = ?`,
+          [
+            realName,
+            idCardNo,
+            idCardFront,
+            idCardBack,
+            phone,
+            optionalText(body.community, 100) || user?.community || "",
+            emergencyContact,
+            ACCEPTOR_STATUS.REVIEWING,
+            ACCEPTOR_DEPOSIT_AMOUNT,
+            DEPOSIT_STATUS.UNPAID,
+            now(),
+            now(),
+            userId,
+          ],
+        );
+      } else {
+        run(
+          `INSERT INTO acceptor_profiles
+            (user_id, real_name, id_card_no, id_card_front, id_card_back, phone, community,
+             emergency_contact, status, deposit_amount, deposit_status, applied_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            userId,
+            realName,
+            idCardNo,
+            idCardFront,
+            idCardBack,
+            phone,
+            optionalText(body.community, 100) || user?.community || "",
+            emergencyContact,
+            ACCEPTOR_STATUS.REVIEWING,
+            ACCEPTOR_DEPOSIT_AMOUNT,
+            DEPOSIT_STATUS.UNPAID,
+            now(),
+          ],
+        );
+      }
+      createMessage(
+        userId,
+        "接单员认证已提交",
+        `实名认证资料已提交，管理员审核通过后缴纳 ¥${ACCEPTOR_DEPOSIT_AMOUNT.toFixed(2)} 保证金即可开始接单。`,
+        1,
+      );
+    });
+    logOperation(identity, "submit_acceptor_apply", "acceptor", userId, `实名 ${realName}`, req);
+    const gate = acceptorGate(userId);
+    return ok(
+      res,
+      { ...gate.summary, profile: acceptorView(gate.profile) },
+      "认证资料已提交，请等待管理员审核",
+    );
+  }
+
+  // 缴纳保证金：从钱包余额扣除，钱进入平台托管，状态变为可接单
+  if (method === "POST" && pathname === "/api/acceptor/deposit") {
+    enforceRateLimit(req, "acceptor-deposit", 10);
+    const userId = Number(identity.id);
+    const current = findAcceptorProfile(userId);
+    if (!current) throw new HttpError(409, "请先提交接单员实名认证申请");
+    const currentStatus = Number(current.status);
+    if (currentStatus === ACCEPTOR_STATUS.REVIEWING) {
+      throw new HttpError(409, "实名认证正在审核中，通过后即可缴纳保证金");
+    }
+    if (currentStatus === ACCEPTOR_STATUS.REJECTED) {
+      throw new HttpError(409, "实名认证未通过，请修改资料后重新提交");
+    }
+    if (isAcceptorActive(current)) {
+      throw new HttpError(409, "你已缴纳保证金，无需重复缴纳");
+    }
+    let paid = 0;
+    transaction(() => {
+      // 事务内重新读取，避免与管理员审核、并发点击产生竞态
+      const fresh = get("SELECT * FROM acceptor_profiles WHERE user_id = ?", [userId]);
+      // 状态冲突统一返回 409（资源当前状态不允许该操作），
+      // 与入参格式错误（400）区分开，前端才能给出不同的引导文案
+      if (Number(fresh?.status) !== ACCEPTOR_STATUS.APPROVED) {
+        throw new HttpError(409, "当前状态不能缴纳保证金，请先确认实名认证已通过");
+      }
+      if (Number(fresh.deposit_status) === DEPOSIT_STATUS.HELD) {
+        throw new HttpError(409, "保证金已在托管中，无需重复缴纳");
+      }
+      const amount = ACCEPTOR_DEPOSIT_AMOUNT;
+      const user = get("SELECT balance FROM users WHERE id = ?", [userId]);
+      requireValue(
+        Number(user.balance) >= amount,
+        `保证金需 ¥${amount.toFixed(2)}，当前余额不足，请先充值`,
+      );
+      paid = changeBalance(
+        userId,
+        -amount,
+        null,
+        WALLET_TYPE.DEPOSIT,
+        `接单员保证金缴纳 ¥${amount.toFixed(2)}`,
+      );
+      run(
+        `UPDATE acceptor_profiles SET
+          status = ?, deposit_amount = ?, deposit_status = ?, deposit_paid_at = ?, updated_at = ?
+         WHERE user_id = ?`,
+        [ACCEPTOR_STATUS.ACTIVE, amount, DEPOSIT_STATUS.HELD, now(), now(), userId],
+      );
+      createMessage(
+        userId,
+        "接单员认证已完成",
+        `保证金 ¥${amount.toFixed(2)} 已缴纳，你现在可以在任务大厅接单了。`,
+        1,
+      );
+    });
+    logOperation(
+      identity,
+      "pay_acceptor_deposit",
+      "acceptor",
+      current.id,
+      `¥${ACCEPTOR_DEPOSIT_AMOUNT}`,
+      req,
+    );
+    const gate = acceptorGate(userId);
+    return ok(
+      res,
+      { ...gate.summary, balance: paid, profile: acceptorView(gate.profile) },
+      "保证金已缴纳，你现在可以接单了",
+    );
+  }
+
+  // 退出接单员并退还保证金。
+  // 前置条件：保证金确实处于托管中、且没有进行中的订单——
+  // 否则会出现"退了钱却还有在途责任"的死角。
+  if (method === "POST" && pathname === "/api/acceptor/quit") {
+    enforceRateLimit(req, "acceptor-quit", 10);
+    const userId = Number(identity.id);
+    const current = findAcceptorProfile(userId);
+    if (!isAcceptorActive(current)) {
+      throw new HttpError(409, "你当前不是已认证的接单员");
+    }
+    const inFlight = get(
+      "SELECT COUNT(*) AS total FROM orders WHERE acceptor_id = ? AND status IN (?, ?)",
+      [userId, ORDER_STATUS.ACCEPTED, ORDER_STATUS.IN_SERVICE],
+    ).total;
+    if (Number(inFlight) > 0) {
+      throw new HttpError(
+        409,
+        `你还有 ${inFlight} 个进行中的订单，请先完成后再退出接单员`,
+      );
+    }
+    let refunded = 0;
+    transaction(() => {
+      const fresh = get("SELECT * FROM acceptor_profiles WHERE user_id = ?", [userId]);
+      if (!isAcceptorActive(fresh)) {
+        throw new HttpError(409, "你当前不是已认证的接单员");
+      }
+      const amount = Number(fresh.deposit_amount || 0);
+      if (amount > 0) {
+        refunded = changeBalance(
+          userId,
+          amount,
+          null,
+          WALLET_TYPE.DEPOSIT_REFUND,
+          `接单员保证金退还 ¥${amount.toFixed(2)}`,
+        );
+      }
+      run(
+        `UPDATE acceptor_profiles SET
+          status = ?, deposit_status = ?, deposit_refunded_at = ?, updated_at = ?
+         WHERE user_id = ?`,
+        [ACCEPTOR_STATUS.QUIT, DEPOSIT_STATUS.REFUNDED, now(), now(), userId],
+      );
+      createMessage(
+        userId,
+        "已退出接单员",
+        amount > 0
+          ? `保证金 ¥${amount.toFixed(2)} 已退回你的钱包余额，再次接单需重新完成认证。`
+          : "你已退出接单员，再次接单需重新完成认证。",
+        1,
+      );
+    });
+    logOperation(identity, "quit_acceptor", "acceptor", current.id, "退出并退还保证金", req);
+    const gate = acceptorGate(userId);
+    return ok(
+      res,
+      { ...gate.summary, balance: refunded, profile: acceptorView(gate.profile) },
+      "已退出接单员，保证金已退回余额",
+    );
+  }
+
   if (method === "GET" && pathname === "/api/reviews") {
     return ok(
       res,
@@ -1167,6 +1514,15 @@ async function handleApi(req, res, url) {
       "SELECT COALESCE(SUM(amount), 0) AS total FROM orders WHERE status = 3",
     ).total;
     const pendingComplaints = get("SELECT COUNT(*) AS total FROM complaints WHERE status IN (0, 1)").total;
+    // 接单员认证指标：已认证人数与待审核申请数
+    const acceptorCount = get(
+      "SELECT COUNT(*) AS total FROM acceptor_profiles WHERE status = ? AND deposit_status = ?",
+      [ACCEPTOR_STATUS.ACTIVE, DEPOSIT_STATUS.HELD],
+    ).total;
+    const pendingAcceptorReviews = get(
+      "SELECT COUNT(*) AS total FROM acceptor_profiles WHERE status = ?",
+      [ACCEPTOR_STATUS.REVIEWING],
+    ).total;
     const statusDistribution = all(
       "SELECT status, COUNT(*) AS total FROM tasks GROUP BY status ORDER BY status",
     );
@@ -1180,7 +1536,15 @@ async function handleApi(req, res, url) {
        ORDER BY o.created_at DESC LIMIT 8`,
     );
     return ok(res, {
-      metrics: { userCount, taskCount, orderCount, transactionAmount, pendingComplaints },
+      metrics: {
+        userCount,
+        taskCount,
+        orderCount,
+        transactionAmount,
+        pendingComplaints,
+        acceptorCount,
+        pendingAcceptorReviews,
+      },
       statusDistribution,
       recentOrders,
     });
@@ -1458,6 +1822,151 @@ async function handleApi(req, res, url) {
       );
     });
     return ok(res, null, "投诉已处理");
+  }
+
+  // ------------------------------------------------------------ 接单员审核
+
+  if (method === "GET" && pathname === "/api/admin/acceptor-profiles") {
+    requireSuperAdmin(identity);
+    const { page, pageSize } = readPagination(url);
+    const keyword = optionalText(url.searchParams.get("keyword"), 64);
+    const statusRaw = url.searchParams.get("status");
+    const where = [];
+    const params = [];
+    if (statusRaw !== null && statusRaw !== "" && Number.isInteger(Number(statusRaw))) {
+      where.push("ap.status = ?");
+      params.push(Number(statusRaw));
+    }
+    if (keyword) {
+      where.push("(ap.real_name LIKE ? OR ap.phone LIKE ? OR u.nickname LIKE ? OR u.uid LIKE ?)");
+      const like = `%${keyword}%`;
+      params.push(like, like, like, like);
+    }
+    const clause = where.length ? `WHERE ${where.join(" AND ")}` : "";
+    const total = get(
+      `SELECT COUNT(*) AS total FROM acceptor_profiles ap JOIN users u ON u.id = ap.user_id ${clause}`,
+      params,
+    ).total;
+    const rows = all(
+      `SELECT ap.*, u.nickname, u.uid, u.balance, u.credit_score, a.username AS reviewer_name
+       FROM acceptor_profiles ap
+       JOIN users u ON u.id = ap.user_id
+       LEFT JOIN admins a ON a.id = ap.reviewed_by
+       ${clause}
+       ORDER BY CASE ap.status WHEN 1 THEN 0 WHEN 2 THEN 1 ELSE 2 END, ap.updated_at DESC
+       LIMIT ? OFFSET ?`,
+      [...params, pageSize, (page - 1) * pageSize],
+    );
+    // acceptorView 刻意不包含完整身份证号，只给出脱敏形式
+    const list = rows.map((row) => ({
+      ...acceptorView(row),
+      nickname: row.nickname,
+      uid: row.uid,
+      balance: row.balance,
+      credit_score: row.credit_score,
+      reviewer_name: row.reviewer_name,
+    }));
+    const summary = {
+      reviewing: get(
+        "SELECT COUNT(*) AS total FROM acceptor_profiles WHERE status = ?",
+        [ACCEPTOR_STATUS.REVIEWING],
+      ).total,
+      approved: get(
+        "SELECT COUNT(*) AS total FROM acceptor_profiles WHERE status = ?",
+        [ACCEPTOR_STATUS.APPROVED],
+      ).total,
+      active: get(
+        "SELECT COUNT(*) AS total FROM acceptor_profiles WHERE status = ?",
+        [ACCEPTOR_STATUS.ACTIVE],
+      ).total,
+      required_deposit: ACCEPTOR_DEPOSIT_AMOUNT,
+    };
+    return ok(res, { list, total, page, pageSize, summary });
+  }
+
+  // 查看完整身份证号：单独的接口 + 审计日志。
+  // 完整号码属于敏感个人信息，不做常规列表字段，
+  // 每次查看都会在操作日志里留痕，便于事后追责。
+  const adminAcceptorIdCardMatch = pathname.match(
+    /^\/api\/admin\/acceptor-profiles\/(\d+)\/id-card$/,
+  );
+  if (method === "GET" && adminAcceptorIdCardMatch) {
+    requireSuperAdmin(identity);
+    const profile = get("SELECT * FROM acceptor_profiles WHERE id = ?", [
+      Number(adminAcceptorIdCardMatch[1]),
+    ]);
+    if (!profile) throw new HttpError(404, "认证申请不存在");
+    logOperation(
+      identity,
+      "view_id_card",
+      "acceptor",
+      profile.id,
+      `查看用户 ${profile.user_id} 的完整身份证号`,
+      req,
+    );
+    return ok(
+      res,
+      {
+        id_card_no: profile.id_card_no,
+        id_card_masked: maskIdCard(profile.id_card_no),
+      },
+      "已记录本次查看行为",
+    );
+  }
+
+  const adminAcceptorReviewMatch = pathname.match(
+    /^\/api\/admin\/acceptor-profiles\/(\d+)\/review$/,
+  );
+  if (method === "PUT" && adminAcceptorReviewMatch) {
+    requireSuperAdmin(identity);
+    const body = await parseBody(req);
+    const profile = get("SELECT * FROM acceptor_profiles WHERE id = ?", [
+      Number(adminAcceptorReviewMatch[1]),
+    ]);
+    if (!profile) throw new HttpError(404, "认证申请不存在");
+    if (Number(profile.status) !== ACCEPTOR_STATUS.REVIEWING) {
+      throw new HttpError(409, "该申请当前不处于待审核状态，请刷新后重试");
+    }
+    const approved = body.approved === true || Number(body.approved) === 1;
+    const reviewNote = optionalText(body.reviewNote, 200);
+    requireValue(approved || reviewNote, "驳回时必须填写审核意见，便于申请人修改资料");
+    const deposit = Number(profile.deposit_amount || ACCEPTOR_DEPOSIT_AMOUNT);
+    transaction(() => {
+      run(
+        `UPDATE acceptor_profiles SET
+          status = ?, review_note = ?, reviewed_by = ?, reviewed_at = ?, updated_at = ?
+         WHERE id = ?`,
+        [
+          approved ? ACCEPTOR_STATUS.APPROVED : ACCEPTOR_STATUS.REJECTED,
+          reviewNote,
+          identity.id,
+          now(),
+          now(),
+          profile.id,
+        ],
+      );
+      createMessage(
+        profile.user_id,
+        approved ? "接单员认证已通过" : "接单员认证未通过",
+        approved
+          ? `实名认证已通过，缴纳 ¥${deposit.toFixed(2)} 保证金后即可开始接单。`
+          : `未通过原因：${reviewNote}。请修改资料后重新提交。`,
+        1,
+      );
+    });
+    logOperation(
+      identity,
+      "review_acceptor",
+      "acceptor",
+      profile.id,
+      approved ? "审核通过" : `审核驳回：${reviewNote}`,
+      req,
+    );
+    return ok(
+      res,
+      acceptorView(get("SELECT * FROM acceptor_profiles WHERE id = ?", [profile.id])),
+      approved ? "已通过实名认证" : "已驳回认证申请",
+    );
   }
 
   if (method === "GET" && pathname === "/api/admin/logs") {

@@ -40,8 +40,42 @@ const COMPLAINT_STATUS = {
   REJECTED: 3, // 已驳回
 };
 
+// 接单员认证状态。
+// 接单是"平台代为交付服务"的行为，因此比发布任务要求更高：
+// 必须完成实名认证（身份证 + 手机号）并缴纳保证金后才具备接单资格。
+// NONE 不落库，仅用于对外表达"该用户从未提交过申请"。
+const ACCEPTOR_STATUS = {
+  NONE: 0, // 未申请
+  REVIEWING: 1, // 已提交资料，等待管理员审核
+  APPROVED: 2, // 审核通过，待缴纳保证金
+  ACTIVE: 3, // 已认证，具备接单资格
+  REJECTED: 4, // 审核未通过
+  QUIT: 5, // 已退出接单员（保证金已退还）
+};
+
+// 保证金状态：与 PAY_STATUS 同样的思路——它描述"钱在哪里"，
+// 是判断保证金是否需要退还的唯一可信依据。
+const DEPOSIT_STATUS = {
+  UNPAID: 0, // 未缴纳
+  HELD: 1, // 已缴纳并托管在平台
+  REFUNDED: 2, // 已退还本人
+};
+
+// 钱包流水类型。保证金相关的两笔单独编号，
+// 避免与"发布托管 / 取消退款"混为一谈导致对账困难。
+const WALLET_TYPE = {
+  SETTLEMENT: 1, // 订单结算收入
+  ESCROW: 2, // 发布任务托管扣款 / 裁决扣回
+  REFUND: 3, // 订单取消或裁决退款
+  RECHARGE: 4, // 充值
+  WITHDRAW: 5, // 提现
+  DEPOSIT: 6, // 接单员保证金缴纳
+  DEPOSIT_REFUND: 7, // 接单员保证金退还
+};
+
 const TASK_STATUS_VALUES = Object.values(TASK_STATUS);
 const ORDER_STATUS_VALUES = Object.values(ORDER_STATUS);
+const ACCEPTOR_STATUS_VALUES = Object.values(ACCEPTOR_STATUS);
 
 const TASK_STATUS_LABEL = {
   [TASK_STATUS.PENDING]: "待接单",
@@ -60,6 +94,47 @@ const ORDER_STATUS_LABEL = {
   [ORDER_STATUS.CANCELLED]: "已取消",
   [ORDER_STATUS.DISPUTED]: "争议中",
 };
+
+const ACCEPTOR_STATUS_LABEL = {
+  [ACCEPTOR_STATUS.NONE]: "未认证",
+  [ACCEPTOR_STATUS.REVIEWING]: "审核中",
+  [ACCEPTOR_STATUS.APPROVED]: "待缴保证金",
+  [ACCEPTOR_STATUS.ACTIVE]: "已认证",
+  [ACCEPTOR_STATUS.REJECTED]: "审核未通过",
+  [ACCEPTOR_STATUS.QUIT]: "已退出",
+};
+
+const DEPOSIT_STATUS_LABEL = {
+  [DEPOSIT_STATUS.UNPAID]: "未缴纳",
+  [DEPOSIT_STATUS.HELD]: "已缴纳",
+  [DEPOSIT_STATUS.REFUNDED]: "已退还",
+};
+
+// 是否具备接单资格——接单接口与前端按钮唯一应使用的判断。
+function isAcceptorActive(profile) {
+  return (
+    Boolean(profile) &&
+    Number(profile.status) === ACCEPTOR_STATUS.ACTIVE &&
+    Number(profile.deposit_status) === DEPOSIT_STATUS.HELD
+  );
+}
+
+// 未具备资格时，告诉用户"还差哪一步"，而不是笼统地说"无权限"。
+function describeAcceptorBlocker(profile) {
+  if (!profile) return "你还没有接单员认证，请先提交实名认证申请";
+  switch (Number(profile.status)) {
+    case ACCEPTOR_STATUS.REVIEWING:
+      return "实名认证正在审核中，通过后缴纳保证金即可接单";
+    case ACCEPTOR_STATUS.APPROVED:
+      return "实名认证已通过，缴纳保证金后即可开始接单";
+    case ACCEPTOR_STATUS.REJECTED:
+      return "实名认证未通过，请修改资料后重新提交";
+    case ACCEPTOR_STATUS.QUIT:
+      return "你已退出接单员，重新提交认证并通过审核后可再次接单";
+    default:
+      return "你还没有接单员认证，请先提交实名认证申请";
+  }
+}
 
 // 依据订单与任务的事实状态推导任务当前应处的进度。
 //
@@ -84,7 +159,12 @@ function deriveTaskStatus(order, task) {
 }
 
 module.exports = {
+  ACCEPTOR_STATUS,
+  ACCEPTOR_STATUS_LABEL,
+  ACCEPTOR_STATUS_VALUES,
   COMPLAINT_STATUS,
+  DEPOSIT_STATUS,
+  DEPOSIT_STATUS_LABEL,
   ORDER_STATUS,
   ORDER_STATUS_LABEL,
   ORDER_STATUS_VALUES,
@@ -92,5 +172,8 @@ module.exports = {
   TASK_STATUS,
   TASK_STATUS_LABEL,
   TASK_STATUS_VALUES,
+  WALLET_TYPE,
   deriveTaskStatus,
+  describeAcceptorBlocker,
+  isAcceptorActive,
 };

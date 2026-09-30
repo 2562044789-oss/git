@@ -254,12 +254,39 @@ function createSchema() {
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS acceptor_profiles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER UNIQUE NOT NULL,
+      real_name TEXT NOT NULL,
+      id_card_no TEXT NOT NULL,
+      id_card_front TEXT NOT NULL,
+      id_card_back TEXT NOT NULL,
+      phone TEXT NOT NULL,
+      community TEXT DEFAULT '',
+      emergency_contact TEXT DEFAULT '',
+      status INTEGER NOT NULL DEFAULT 1,
+      review_note TEXT DEFAULT '',
+      reviewed_by INTEGER,
+      reviewed_at TEXT,
+      deposit_amount REAL NOT NULL DEFAULT 0,
+      deposit_status INTEGER NOT NULL DEFAULT 0,
+      deposit_paid_at TEXT,
+      deposit_refunded_at TEXT,
+      applied_at TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
     CREATE INDEX IF NOT EXISTS idx_tasks_category ON tasks(category_id);
     CREATE INDEX IF NOT EXISTS idx_orders_publisher ON orders(publisher_id);
     CREATE INDEX IF NOT EXISTS idx_orders_acceptor ON orders(acceptor_id);
     CREATE INDEX IF NOT EXISTS idx_messages_user ON messages(user_id, is_read);
     CREATE INDEX IF NOT EXISTS idx_logs_created ON operation_logs(created_at);
+    -- 同一身份证号只允许绑定一个账号，防止同一人开多个接单账号刷单
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_acceptor_id_card ON acceptor_profiles(id_card_no);
+    CREATE INDEX IF NOT EXISTS idx_acceptor_status ON acceptor_profiles(status);
   `);
 }
 
@@ -272,7 +299,7 @@ function seed() {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1)
   `);
   // 演示余额与下方钱包流水严格自洽：
-  // 林小满 150-5(托管task5)=145；李师傅 80-8(task1)=72；周小北 100-28(task2)-12(task6)=60；
+  // 林小满 150-5(托管task5)=145；李师傅 130-50(保证金)-8(task1)=72；周小北 100-28(task2)-12(task6)=60；
   // 王老师 60-10(task3)=50；陈阿姨 60-6(task4)=54
   [
     ["demo-user", "林小满", "", "13800005621", "阳光社区", "12栋", "2单元 602", 98, 145],
@@ -407,7 +434,9 @@ function seed() {
     format(tomorrow),
     12,
     3,
-    1,
+    // 接单者固定为已认证的李师傅（演示主账号林小满刻意保持未认证，
+    // 因此不能是"未认证却有在进行中的接单"这种自相矛盾的演示数据）
+    2,
     now(),
     now(),
     now(),
@@ -421,7 +450,7 @@ function seed() {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   insertOrder.run("SQ202609110001", 5, 1, 2, 5, 1, 1, now(), null, now(), now());
-  insertOrder.run("SQ202609110002", 6, 3, 1, 12, 2, 1, now(), null, now(), now());
+  insertOrder.run("SQ202609110002", 6, 3, 2, 12, 2, 1, now(), null, now(), now());
 
   const insertAddress = db.prepare(`
     INSERT INTO addresses
@@ -438,8 +467,9 @@ function seed() {
   // 林小满：充值 150，发布 task5 托管 -5
   insertWallet.run(1, null, 4, 150, 150, "微信充值（模拟）", now());
   insertWallet.run(1, 1, 2, -5, 145, "发布任务“晚饭后帮忙带下垃圾”托管", now());
-  // 李师傅：充值 80，发布 task1 托管 -8
-  insertWallet.run(2, null, 4, 80, 80, "微信充值（模拟）", now());
+  // 李师傅：充值 130，缴纳接单员保证金 -50（余额 80），发布 task1 托管 -8（余额 72）
+  insertWallet.run(2, null, 4, 130, 130, "微信充值（模拟）", now());
+  insertWallet.run(2, null, 6, -50, 80, "接单员保证金缴纳", now());
   insertWallet.run(2, null, 2, -8, 72, "发布任务“帮忙取一下丰巢快递”托管", now());
   // 周小北：充值 100，发布 task2 托管 -28、task6 托管 -12
   insertWallet.run(3, null, 4, 100, 100, "微信充值（模拟）", now());
@@ -452,11 +482,60 @@ function seed() {
   insertWallet.run(5, null, 4, 60, 60, "微信充值（模拟）", now());
   insertWallet.run(5, null, 2, -6, 54, "发布任务“顺路取两杯奶茶”托管", now());
 
+  // 接单员认证演示数据（身份证号与照片均为虚构，仅用于演示）：
+  //   李师傅 已认证且保证金在托管中 —— 演示"有资格接单"的状态
+  //   周小北 待审核 —— 让管理后台的审核列表开箱即有内容
+  //   林小满（演示主账号）刻意保持"未申请"，便于完整演示
+  //   申请 → 审核 → 缴纳保证金 → 接单 的全流程
+  const insertAcceptor = db.prepare(`
+    INSERT INTO acceptor_profiles (
+      user_id, real_name, id_card_no, id_card_front, id_card_back, phone, community,
+      emergency_contact, status, review_note, reviewed_by, reviewed_at,
+      deposit_amount, deposit_status, deposit_paid_at, applied_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  insertAcceptor.run(
+    2,
+    "李建国",
+    "110101199003150011",
+    "/preview/demo-proof.svg",
+    "/preview/demo-proof.svg",
+    "13900002048",
+    "阳光社区",
+    "李女士 13900002049",
+    3,
+    "资料齐全，已通过实名核验",
+    1,
+    now(),
+    50,
+    1,
+    now(),
+    now(),
+  );
+  insertAcceptor.run(
+    3,
+    "周敏",
+    "320102198511080006",
+    "/preview/demo-proof.svg",
+    "/preview/demo-proof.svg",
+    "13600007712",
+    "阳光社区",
+    "周先生 13600007713",
+    1,
+    "",
+    null,
+    null,
+    50,
+    0,
+    null,
+    now(),
+  );
+
   const insertMessage = db.prepare(`
     INSERT INTO messages (user_id, title, content, type, related_id, is_read, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
-  insertMessage.run(1, "订单进度更新", "你接取的“帮取一份文件并送上门”已进入待确认。", 3, 2, 0, now());
+  insertMessage.run(2, "订单进度更新", "你接取的“帮取一份文件并送上门”已进入待确认。", 3, 2, 0, now());
   insertMessage.run(1, "社区公告", "阳光社区周末志愿便民服务将在中心广场开展。", 1, null, 0, now());
   insertMessage.run(1, "任务已被接单", "李师傅已接取“晚饭后帮忙带下垃圾”。", 2, 5, 1, now());
 

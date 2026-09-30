@@ -324,3 +324,50 @@
   font-weight: 650;
   letter-spacing: 0;
 }
+
+/* 接单员认证卡片：接单资格是可用性的前置条件，放在统计数据下方显著位置 */
+.certify-card {
+  margin-top: 20rpx;
+  padding: 26rpx 28rpx;
+}
+
+.certify-card.certified {
+  border-color: rgba(74, 169, 116, 0.28);
+  background: linear-gradient(135deg, #f2fbf5 0%, #ffffff 70%);
+}
+
+.certify-head {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+}
+
+.certify-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 18rpx;
+  color: #ffffff;
+  background: var(--primary);
+  font-size: 30rpx;
+  font-weight: 700;
+}
+
+.certify-title {
+  font-size: 29rpx;
+  font-weight: 700;
+}
+
+.certify-subtitle {
+  margin-top: 6rpx;
+  color: var(--muted);
+  font-size: 23rpx;
+  line-height: 1.5;
+}
+
+.certify-button {
+  margin-top: 22rpx;
+}

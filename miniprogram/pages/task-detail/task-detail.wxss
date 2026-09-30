@@ -206,6 +206,32 @@
   background: rgba(255, 255, 255, 0.98);
 }
 
+/* 未通过认证门槛时的就近引导：说明原因并给一个直达认证页的入口 */
+.certify-tip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin: 0 28rpx 20rpx;
+  padding: 20rpx 24rpx;
+  border-radius: 18rpx;
+  background: #fff7e9;
+}
+
+.certify-tip-text {
+  flex: 1;
+  color: #a86429;
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
+.certify-tip-link {
+  flex: none;
+  color: #31875a;
+  font-size: 25rpx;
+  font-weight: 600;
+}
+
 .contact-button,
 .accept-button {
   height: 88rpx;

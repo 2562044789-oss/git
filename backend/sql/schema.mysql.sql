@@ -210,3 +210,32 @@ CREATE TABLE announcements (
   status TINYINT DEFAULT 1,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
+
+-- 接单员实名认证与保证金。
+-- 只有 status=3（审核通过）且 deposit_status=1（保证金托管中）的账号才能接单。
+-- id_card_no 唯一：同一身份证号只允许绑定一个账号，防止一人多号刷单。
+CREATE TABLE acceptor_profiles (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  user_id BIGINT UNIQUE NOT NULL,
+  real_name VARCHAR(32) NOT NULL,
+  id_card_no CHAR(18) NOT NULL,
+  id_card_front VARCHAR(255) NOT NULL,
+  id_card_back VARCHAR(255) NOT NULL,
+  phone VARCHAR(20) NOT NULL,
+  community VARCHAR(100) DEFAULT '',
+  emergency_contact VARCHAR(64) DEFAULT '',
+  status TINYINT NOT NULL DEFAULT 1 COMMENT '0 未申请，1 待审核，2 待缴保证金，3 已认证，4 未通过，5 已退出',
+  review_note VARCHAR(200) DEFAULT '',
+  reviewed_by BIGINT,
+  reviewed_at DATETIME,
+  deposit_amount DECIMAL(10, 2) NOT NULL DEFAULT 0,
+  deposit_status TINYINT NOT NULL DEFAULT 0 COMMENT '0 未缴纳，1 托管中，2 已退还',
+  deposit_paid_at DATETIME,
+  deposit_refunded_at DATETIME,
+  applied_at DATETIME,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_acceptor_id_card (id_card_no),
+  KEY idx_acceptor_status (status),
+  CONSTRAINT fk_acceptor_user FOREIGN KEY (user_id) REFERENCES users(id)
+) ENGINE=InnoDB;

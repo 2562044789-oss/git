@@ -103,6 +103,63 @@ function balanceOf(userId) {
   return Number(queryOne("SELECT balance FROM users WHERE id = ?", [userId]).balance);
 }
 
+// 生成符合 GB 11643-1999 校验规则的 18 位身份证号。
+// 前 17 位固定为行政区划 + 出生日期 + 自增顺序码（保证唯一），
+// 最后一位按加权校验和计算，确保能通过后端 readIdCardNo 的格式与校验位检查。
+// 行政区划/生日刻意避开种子数据（110101/320102 段），否则会撞上唯一索引。
+const ID_CARD_WEIGHTS = [7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2];
+const ID_CARD_CHECK_CHARS = "10X98765432";
+let idCardSeq = 0;
+function makeIdCardNo() {
+  idCardSeq += 1;
+  const prefix = `44030519880101${String(idCardSeq).padStart(3, "0")}`;
+  const sum = [...prefix].reduce(
+    (total, char, index) => total + Number(char) * ID_CARD_WEIGHTS[index],
+    0,
+  );
+  return `${prefix}${ID_CARD_CHECK_CHARS[sum % 11]}`;
+}
+
+// 把已登录用户升级为"审核通过 + 保证金托管中"的合格接单员。
+// 接单门槛上线后，凡是要真正接单的测试都必须先走完 申请 → 审核 → 缴费 三步。
+async function certifyAcceptor(
+  session,
+  adminToken,
+  { realName = "测试接单员", idCardNo, phone } = {},
+) {
+  const contactPhone = phone || `1380000${String(idCardSeq).padStart(4, "0")}`;
+  const applied = await api("POST", "/api/acceptor/apply", {
+    token: session.token,
+    body: {
+      realName,
+      idCardNo: idCardNo || makeIdCardNo(),
+      phone: contactPhone,
+      idCardFront: "/uploads/test-id-front.png",
+      idCardBack: "/uploads/test-id-back.png",
+    },
+  });
+  assert.equal(applied.status, 200, `认证申请失败：${JSON.stringify(applied.body)}`);
+  const profileId = applied.body.data.profile.id;
+
+  const reviewed = await api("PUT", `/api/admin/acceptor-profiles/${profileId}/review`, {
+    token: adminToken,
+    body: { approved: true },
+  });
+  assert.equal(reviewed.status, 200, `审核认证失败：${JSON.stringify(reviewed.body)}`);
+
+  const paid = await api("POST", "/api/acceptor/deposit", { token: session.token });
+  assert.equal(paid.status, 200, `缴纳保证金失败：${JSON.stringify(paid.body)}`);
+  return profileId;
+}
+
+// 一步创建"已认证 + 已缴保证金"的接单员：充值 amount 后扣掉 50 元保证金
+async function createCertifiedAcceptor(amount = 200) {
+  const session = await createFundedUser(amount);
+  const adminToken = await loginAdmin();
+  await certifyAcceptor(session, adminToken);
+  return session;
+}
+
 // 把一条任务从发布一路推进到"已完成并结算"，返回相关标识
 async function completeAnOrder(publisher, acceptor, reward = 12) {
   const published = await api("POST", "/api/tasks", {
@@ -151,6 +208,9 @@ test.before(async () => {
         WECHAT_MOCK_LOGIN: "1",
         JWT_SECRET: "",
         NODE_ENV: "",
+        // 测试会在几秒内反复调用登录/充值/认证接口，必然触发按分钟计的限流；
+        // 这里显式关掉限流，生产环境不设置该变量，防护行为不受影响。
+        RATE_LIMIT_DISABLED: "1",
       },
       stdio: ["ignore", "pipe", "pipe"],
     },
@@ -285,7 +345,7 @@ test("改资料与新增地址的长度会被截断，不会原样落库", async
 
 test("完整履约链路：托管 → 接单 → 交凭证 → 确认结算，余额逐笔对账", async () => {
   const publisher = await createFundedUser(200);
-  const acceptor = await createFundedUser(0);
+  const acceptor = await createCertifiedAcceptor(200);
   const reward = 12;
 
   const publisherBefore = balanceOf(publisher.user.id);
@@ -312,7 +372,7 @@ test("完整履约链路：托管 → 接单 → 交凭证 → 确认结算，�
 
 test("已完成订单裁决退款：必须真实扣回并退款，且状态与资金一致", async () => {
   const publisher = await createFundedUser(200);
-  const acceptor = await createFundedUser(0);
+  const acceptor = await createCertifiedAcceptor(200);
   const reward = 12;
 
   const { orderId, taskId } = await completeAnOrder(publisher, acceptor, reward);
@@ -369,7 +429,7 @@ test("已完成订单裁决退款：必须真实扣回并退款，且状态与�
 
 test("裁决驳回后任务状态会被恢复，不会永久卡在争议中", async () => {
   const publisher = await createFundedUser(200);
-  const acceptor = await createFundedUser(0);
+  const acceptor = await createCertifiedAcceptor(200);
 
   const { orderId, taskId } = await completeAnOrder(publisher, acceptor, 10);
 
@@ -402,7 +462,7 @@ test("裁决驳回后任务状态会被恢复，不会永久卡在争议中", as
 
 test("同一订单不能重复提交未处理的投诉", async () => {
   const publisher = await createFundedUser(200);
-  const acceptor = await createFundedUser(0);
+  const acceptor = await createCertifiedAcceptor(200);
   const { orderId } = await completeAnOrder(publisher, acceptor, 8);
 
   const first = await api("POST", "/api/complaints", {
@@ -421,9 +481,9 @@ test("同一订单不能重复提交未处理的投诉", async () => {
 test("并发接单只有一个能成功", async () => {
   const publisher = await createFundedUser(200);
   const [first, second, third] = await Promise.all([
-    createFundedUser(0),
-    createFundedUser(0),
-    createFundedUser(0),
+    createCertifiedAcceptor(200),
+    createCertifiedAcceptor(200),
+    createCertifiedAcceptor(200),
   ]);
 
   const published = await api("POST", "/api/tasks", {
@@ -513,4 +573,344 @@ test("信用分低于门槛的用户不能发布任务", async () => {
     body: { categoryId: 1, title: "低信用分发布测试", reward: 10 },
   });
   assert.equal(result.status, 400, "信用分不足应被拦截");
+});
+
+// ---------------------------------------------------------------- 接单员认证与接单门槛
+
+test("未认证用户只能发布任务，不能接单，且能拿到不可接单的具体原因", async () => {
+  const publisher = await createFundedUser(200);
+  const stranger = await createFundedUser(200); // 有余额但未提交任何认证资料
+
+  const published = await api("POST", "/api/tasks", {
+    token: stranger.token,
+    body: { categoryId: 1, title: "未认证用户发布任务", reward: 10 },
+  });
+  assert.equal(published.status, 200, "未认证用户发布任务应被允许");
+  assert.equal(published.body.data.status, 0);
+
+  const target = await api("POST", "/api/tasks", {
+    token: publisher.token,
+    body: { categoryId: 1, title: "未认证用户尝试接单", reward: 10 },
+  });
+  const taskId = target.body.data.id;
+
+  const accepted = await api("POST", `/api/tasks/${taskId}/accept`, { token: stranger.token });
+  assert.equal(accepted.status, 403, "未通过认证门槛不能接单");
+  assert.match(accepted.body.msg, /认证|保证金/, "拦截提示应说明缺少哪一步");
+
+  // 任务详情也要提前给出"不可接单"的原因，避免用户点下去才收到报错
+  const detail = await api("GET", `/api/tasks/${taskId}`, { token: stranger.token });
+  assert.equal(detail.status, 200);
+  assert.equal(detail.body.data.can_accept, false);
+  assert.ok(detail.body.data.accept_blocked_reason, "应返回不可接单的具体原因");
+});
+
+test("身份证号会校验位数、出生日期与校验位", async () => {
+  const user = await createFundedUser(0);
+  const submit = (idCardNo) =>
+    api("POST", "/api/acceptor/apply", {
+      token: user.token,
+      body: {
+        realName: "张三",
+        idCardNo,
+        phone: "13800138000",
+        idCardFront: "/uploads/f.png",
+        idCardBack: "/uploads/b.png",
+      },
+    });
+
+  assert.equal((await submit("11010119900315001")).status, 400, "位数不足应被拒绝");
+  assert.equal((await submit("110101199002300011")).status, 400, "不存在的出生日期应被拒绝");
+  assert.equal((await submit("110101199003150010")).status, 400, "校验位错误应被拒绝");
+
+  // 缺手机号 / 缺证件照片同样要拦住
+  const noPhoto = await api("POST", "/api/acceptor/apply", {
+    token: user.token,
+    body: { realName: "张三", idCardNo: makeIdCardNo(), phone: "13800138000" },
+  });
+  assert.equal(noPhoto.status, 400, "缺少身份证照片应被拒绝");
+
+  const good = await submit(makeIdCardNo());
+  assert.equal(good.status, 200, `合法身份证号应通过：${JSON.stringify(good.body)}`);
+  assert.ok(good.body.data.profile.id_card_masked.includes("*"), "返回的号码必须是脱敏形式");
+});
+
+test("认证流程：申请 → 审核 → 缴保证金 → 可接单，保证金扣款账目一致", async () => {
+  const adminToken = await loginAdmin();
+  const acceptor = await createFundedUser(200);
+  const beforeDeposit = balanceOf(acceptor.user.id);
+
+  await certifyAcceptor(acceptor, adminToken);
+  assert.equal(balanceOf(acceptor.user.id), beforeDeposit - 50, "保证金应从钱包余额扣除");
+
+  const depositRecord = queryOne(
+    "SELECT * FROM wallet_records WHERE user_id = ? AND type = 6 ORDER BY id DESC",
+    [acceptor.user.id],
+  );
+  assert.ok(depositRecord, "应有保证金缴纳流水");
+  assert.equal(Number(depositRecord.amount), -50);
+  assert.equal(
+    Number(depositRecord.balance),
+    balanceOf(acceptor.user.id),
+    "保证金流水余额应与账户余额一致",
+  );
+
+  // 认证通过后真正可以接单
+  const publisher = await createFundedUser(200);
+  const published = await api("POST", "/api/tasks", {
+    token: publisher.token,
+    body: { categoryId: 1, title: "已认证接单员接单测试", reward: 10 },
+  });
+  const accepted = await api("POST", `/api/tasks/${published.body.data.id}/accept`, {
+    token: acceptor.token,
+  });
+  assert.equal(accepted.status, 200, `已认证并缴纳保证金后应能接单：${JSON.stringify(accepted.body)}`);
+
+  // 认证资料接口不得返回完整身份证号
+  const info = await api("GET", "/api/acceptor/profile", { token: acceptor.token });
+  assert.equal(info.status, 200);
+  assert.equal(info.body.data.can_accept, true);
+  assert.equal(info.body.data.profile.id_card_no, undefined, "不应返回完整身份证号");
+  assert.ok(info.body.data.profile.id_card_masked.includes("*"), "应返回脱敏身份证号");
+});
+
+test("同一身份证号只能绑定一个账号，保证金不能重复缴纳", async () => {
+  const adminToken = await loginAdmin();
+  const idCardNo = makeIdCardNo();
+
+  const first = await createFundedUser(200);
+  await certifyAcceptor(first, adminToken, { idCardNo });
+
+  const again = await api("POST", "/api/acceptor/deposit", { token: first.token });
+  assert.equal(again.status, 409, "已缴保证金不应允许重复缴纳");
+
+  const second = await createFundedUser(200);
+  const conflict = await api("POST", "/api/acceptor/apply", {
+    token: second.token,
+    body: {
+      realName: "李四",
+      idCardNo,
+      phone: "13800138001",
+      idCardFront: "/uploads/f.png",
+      idCardBack: "/uploads/b.png",
+    },
+  });
+  assert.equal(conflict.status, 409, "同一身份证号不能绑定第二个账号");
+});
+
+test("有进行中订单时不能退出接单员，结清后退出并退还保证金", async () => {
+  const adminToken = await loginAdmin();
+  const publisher = await createFundedUser(200);
+  const acceptor = await createFundedUser(200);
+  await certifyAcceptor(acceptor, adminToken);
+  const afterCertify = balanceOf(acceptor.user.id);
+
+  const published = await api("POST", "/api/tasks", {
+    token: publisher.token,
+    body: { categoryId: 1, title: "退出接单员前置检查", reward: 10 },
+  });
+  const accepted = await api("POST", `/api/tasks/${published.body.data.id}/accept`, {
+    token: acceptor.token,
+  });
+  assert.equal(accepted.status, 200);
+  const orderId = accepted.body.data.id;
+
+  const blocked = await api("POST", "/api/acceptor/quit", { token: acceptor.token });
+  assert.equal(blocked.status, 409, "有进行中订单时不应允许退出");
+
+  await api("POST", `/api/orders/${orderId}/start`, { token: acceptor.token });
+  await api("POST", `/api/orders/${orderId}/finish`, {
+    token: acceptor.token,
+    body: { images: ["/uploads/test-proof.png"] },
+  });
+  await api("POST", `/api/orders/${orderId}/confirm`, { token: publisher.token });
+
+  const quit = await api("POST", "/api/acceptor/quit", { token: acceptor.token });
+  assert.equal(quit.status, 200, `结清订单后应可退出：${JSON.stringify(quit.body)}`);
+  assert.equal(
+    balanceOf(acceptor.user.id),
+    afterCertify + 10 + 50,
+    "退出后保证金应退回，已完成订单的报酬也已结算",
+  );
+
+  const refundRecord = queryOne(
+    "SELECT * FROM wallet_records WHERE user_id = ? AND type = 7 ORDER BY id DESC",
+    [acceptor.user.id],
+  );
+  assert.ok(refundRecord, "应有保证金退还流水");
+  assert.equal(Number(refundRecord.amount), 50);
+
+  // 退出后失去接单资格，但依然可以发布任务
+  const target = await api("POST", "/api/tasks", {
+    token: publisher.token,
+    body: { categoryId: 1, title: "退出后不可接单检查", reward: 10 },
+  });
+  const rejected = await api("POST", `/api/tasks/${target.body.data.id}/accept`, {
+    token: acceptor.token,
+  });
+  assert.equal(rejected.status, 403, "退出接单员后不能接单");
+
+  const publishAgain = await api("POST", "/api/tasks", {
+    token: acceptor.token,
+    body: { categoryId: 1, title: "退出后仍可发布任务", reward: 10 },
+  });
+  assert.equal(publishAgain.status, 200, "退出接单员不影响发布任务");
+});
+
+test("接单员认证的审核与身份证查看受超级管理员权限约束，且查看留痕", async () => {
+  const applicant = await createFundedUser(200);
+  const applied = await api("POST", "/api/acceptor/apply", {
+    token: applicant.token,
+    body: {
+      realName: "王五",
+      idCardNo: makeIdCardNo(),
+      phone: "13800138002",
+      idCardFront: "/uploads/f.png",
+      idCardBack: "/uploads/b.png",
+    },
+  });
+  assert.equal(applied.status, 200, JSON.stringify(applied.body));
+  const profileId = applied.body.data.profile.id;
+
+  const salt = crypto.randomBytes(16).toString("hex");
+  const hash = crypto.scryptSync("normal456", salt, 64).toString("hex");
+  const connection = new DatabaseSync(dbPath);
+  connection
+    .prepare(
+      "INSERT INTO admins (username, password_hash, real_name, role, status) VALUES (?, ?, ?, 1, 1)",
+    )
+    .run("acceptor-normal-admin", `${salt}:${hash}`, "普通管理员");
+  connection.close();
+
+  const normalLogin = await api("POST", "/api/admin/login", {
+    body: { username: "acceptor-normal-admin", password: "normal456" },
+  });
+  const normalToken = normalLogin.body.data.token;
+
+  assert.equal(
+    (await api("GET", "/api/admin/acceptor-profiles", { token: normalToken })).status,
+    403,
+    "普通管理员不应能查看接单员认证列表",
+  );
+  assert.equal(
+    (
+      await api("GET", `/api/admin/acceptor-profiles/${profileId}/id-card`, {
+        token: normalToken,
+      })
+    ).status,
+    403,
+    "普通管理员不应能查看完整身份证号",
+  );
+  assert.equal(
+    (
+      await api("PUT", `/api/admin/acceptor-profiles/${profileId}/review`, {
+        token: normalToken,
+        body: { approved: true },
+      })
+    ).status,
+    403,
+    "普通管理员不应能审核认证申请",
+  );
+
+  const adminToken = await loginAdmin();
+  const pending = await api("GET", `/api/admin/acceptor-profiles?status=1`, { token: adminToken });
+  assert.equal(pending.status, 200);
+  assert.ok(
+    pending.body.data.list.every((item) => item.id_card_no === undefined),
+    "认证列表不应包含完整身份证号",
+  );
+
+  const idCard = await api("GET", `/api/admin/acceptor-profiles/${profileId}/id-card`, {
+    token: adminToken,
+  });
+  assert.equal(idCard.status, 200);
+  assert.match(idCard.body.data.id_card_no, /^\d{17}[\dX]$/, "超级管理员可查看完整号码");
+
+  const audit = queryOne(
+    "SELECT * FROM operation_logs WHERE action = 'view_id_card' AND target_id = ? ORDER BY id DESC",
+    [profileId],
+  );
+  assert.ok(audit, "查看完整身份证号必须写入审计日志");
+});
+
+test("驳回认证后可以重新提交，且旧审核结论会被清空", async () => {
+  const adminToken = await loginAdmin();
+  const applicant = await createFundedUser(200);
+
+  const applied = await api("POST", "/api/acceptor/apply", {
+    token: applicant.token,
+    body: {
+      realName: "赵六",
+      idCardNo: makeIdCardNo(),
+      phone: "13800138003",
+      idCardFront: "/uploads/f.png",
+      idCardBack: "/uploads/b.png",
+    },
+  });
+  assert.equal(applied.status, 200);
+  const profileId = applied.body.data.profile.id;
+
+  const rejected = await api("PUT", `/api/admin/acceptor-profiles/${profileId}/review`, {
+    token: adminToken,
+    body: { approved: false, reviewNote: "证件照片不清晰" },
+  });
+  assert.equal(rejected.status, 200, JSON.stringify(rejected.body));
+
+  const info = await api("GET", "/api/acceptor/profile", { token: applicant.token });
+  assert.equal(Number(info.body.data.status), 4, "驳回后状态应为未通过");
+  assert.equal(info.body.data.profile.review_note, "证件照片不清晰");
+  assert.equal(info.body.data.can_accept, false);
+  assert.ok(info.body.data.blocked_reason, "应给出不可接单的原因");
+
+  // 未通过状态下不允许缴保证金
+  assert.equal(
+    (await api("POST", "/api/acceptor/deposit", { token: applicant.token })).status,
+    409,
+    "未通过审核时不应允许缴纳保证金",
+  );
+
+  // 重新提交后回到待审核，旧结论清空
+  const reapplied = await api("POST", "/api/acceptor/apply", {
+    token: applicant.token,
+    body: {
+      realName: "赵六",
+      idCardNo: makeIdCardNo(),
+      phone: "13800138003",
+      idCardFront: "/uploads/f2.png",
+      idCardBack: "/uploads/b2.png",
+    },
+  });
+  assert.equal(reapplied.status, 200, JSON.stringify(reapplied.body));
+  assert.equal(Number(reapplied.body.data.status), 1, "重新提交后应回到待审核");
+  assert.equal(reapplied.body.data.profile.review_note, "", "重新提交应清空上一次审核意见");
+
+  // 待审核期间重复提交会被拒绝
+  assert.equal(
+    (
+      await api("POST", "/api/acceptor/apply", {
+        token: applicant.token,
+        body: {
+          realName: "赵六",
+          idCardNo: makeIdCardNo(),
+          phone: "13800138003",
+          idCardFront: "/uploads/f3.png",
+          idCardBack: "/uploads/b3.png",
+        },
+      })
+    ).status,
+    409,
+    "审核中不应允许重复提交",
+  );
+});
+
+test("后台仪表盘会统计接单员数量与待审核申请", async () => {
+  const adminToken = await loginAdmin();
+  const dashboard = await api("GET", "/api/admin/dashboard", { token: adminToken });
+  assert.equal(dashboard.status, 200);
+  const metrics = dashboard.body.data.metrics;
+  assert.ok(Number(metrics.acceptorCount) >= 1, "应统计已认证接单员数量");
+  assert.ok(
+    Number(metrics.pendingAcceptorReviews) >= 1,
+    "应统计待审核的认证申请数量",
+  );
 });

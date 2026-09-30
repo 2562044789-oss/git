@@ -8,6 +8,7 @@
     "pages/profile/profile",
     "pages/task-detail/task-detail",
     "pages/order-detail/order-detail",
+    "pages/acceptor/acceptor",
     "pages/messages/messages",
     "pages/wallet/wallet",
     "pages/addresses/addresses",

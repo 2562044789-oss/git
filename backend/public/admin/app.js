@@ -13,6 +13,7 @@ const state = {
 const sections = [
   ["dashboard", "览", "仪表盘"],
   ["users", "用", "用户管理"],
+  ["acceptors", "员", "接单员审核"],
   ["tasks", "务", "任务管理"],
   ["orders", "单", "订单管理"],
   ["categories", "类", "分类管理"],
@@ -44,6 +45,14 @@ const statusMaps = {
     1: ["处理中", "blue"],
     2: ["已处理", "green"],
     3: ["已驳回", "gray"],
+  },
+  acceptor: {
+    0: ["未申请", "gray"],
+    1: ["待审核", "orange"],
+    2: ["待缴保证金", "blue"],
+    3: ["已认证", "green"],
+    4: ["审核未通过", "red"],
+    5: ["已退出", "gray"],
   },
 };
 
@@ -182,6 +191,7 @@ async function renderSection(section) {
   try {
     if (section === "dashboard") await renderDashboard(content);
     if (section === "users") await renderUsers(content);
+    if (section === "acceptors") await renderAcceptors(content);
     if (section === "tasks") await renderTasks(content);
     if (section === "orders") await renderOrders(content);
     if (section === "categories") await renderCategories(content);
@@ -213,6 +223,8 @@ async function renderDashboard(content) {
         ["订单总数", data.metrics.orderCount, "接单后生成"],
         ["已完成交易额", `¥${money(data.metrics.transactionAmount)}`, "平台服务费默认 0%"],
         ["待处理投诉", data.metrics.pendingComplaints, "需要管理员介入"],
+        ["已认证接单员", data.metrics.acceptorCount ?? 0, "已实名并缴纳保证金"],
+        ["待审核认证", data.metrics.pendingAcceptorReviews ?? 0, "提交后需人工核验"],
       ]
         .map(
           ([label, value, note]) => `
@@ -475,6 +487,187 @@ async function renderComplaints(content) {
   `;
 }
 
+const DEPOSIT_STATUS_TEXT = { 0: "未缴纳", 1: "已缴纳", 2: "已退还" };
+
+function depositStatusText(value) {
+  return DEPOSIT_STATUS_TEXT[Number(value)] || "未知";
+}
+
+function findAcceptor(id) {
+  return (state.data.acceptors || []).find((item) => Number(item.id) === Number(id));
+}
+
+async function renderAcceptors(content) {
+  const status = state.data.acceptorStatus ?? "";
+  const keyword = state.data.acceptorKeyword || "";
+  const query = new URLSearchParams({ pageSize: "100" });
+  if (status !== "") query.set("status", status);
+  if (keyword) query.set("keyword", keyword);
+  const data = await api(`/api/admin/acceptor-profiles?${query.toString()}`);
+  state.data.acceptors = data.list || [];
+  const { reviewing, approved, active, required_deposit: deposit } = data.summary;
+  content.innerHTML = `
+    <div class="page-head">
+      <div>
+        <h2>接单员审核</h2>
+        <p>核验实名资料与身份证照片；通过后申请人缴纳 ¥${money(deposit)} 保证金即可接单</p>
+      </div>
+      <div class="toolbar">
+        <select class="select" id="acceptorStatus">
+          ${[
+            ["", "全部状态"],
+            ["1", "待审核"],
+            ["2", "待缴保证金"],
+            ["3", "已认证"],
+            ["4", "审核未通过"],
+            ["5", "已退出"],
+          ]
+            .map(
+              ([value, label]) =>
+                `<option value="${value}" ${String(status) === value ? "selected" : ""}>${label}</option>`,
+            )
+            .join("")}
+        </select>
+        <input class="input" id="acceptorKeyword" value="${escapeHtml(keyword)}" placeholder="姓名、手机、昵称或 UID">
+        <button class="secondary-button" id="searchAcceptors">查询</button>
+      </div>
+    </div>
+    <div class="metrics-grid">
+      ${[
+        ["待审核", reviewing, "需要人工核验实名资料"],
+        ["待缴保证金", approved, "已通过实名，尚未缴纳"],
+        ["已认证接单员", active, "保证金在托管中，可接单"],
+        ["保证金标准", `¥${money(deposit)}`, "退出时原路退还"],
+      ]
+        .map(
+          ([label, value, note]) => `
+            <article class="metric-card">
+              <div class="metric-label">${label}</div>
+              <div class="metric-value">${value}</div>
+              <div class="metric-note">${note}</div>
+            </article>
+          `,
+        )
+        .join("")}
+    </div>
+    <section class="panel">
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr><th>申请人</th><th>真实姓名</th><th>身份证号</th><th>手机号</th><th>保证金</th><th>状态</th><th>提交时间</th><th>操作</th></tr>
+          </thead>
+          <tbody>
+            ${
+              state.data.acceptors
+                .map(
+                  (item) => `
+                    <tr>
+                      <td><strong>${escapeHtml(item.nickname || `用户 ${item.user_id}`)}</strong><br><span class="topbar-meta">${escapeHtml(item.uid || "")}</span></td>
+                      <td>${escapeHtml(item.real_name)}</td>
+                      <td>${escapeHtml(item.id_card_masked)}</td>
+                      <td>${escapeHtml(item.phone)}</td>
+                      <td>¥${money(item.deposit_amount)}<br><span class="topbar-meta">${depositStatusText(item.deposit_status)}</span></td>
+                      <td>${statusBadge(item.status, "acceptor")}</td>
+                      <td>${escapeHtml(item.applied_at || item.created_at || "")}</td>
+                      <td>${
+                        Number(item.status) === 1
+                          ? `<button class="table-action" data-review-acceptor="${item.id}">审核</button>`
+                          : `<button class="table-action" data-review-acceptor="${item.id}">查看</button>`
+                      }</td>
+                    </tr>
+                  `,
+                )
+                .join("") || '<tr><td colspan="8" class="empty-state">暂无认证申请</td></tr>'
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function openAcceptorEditor(application) {
+  if (!application) {
+    showToast("认证申请不存在，请刷新后重试");
+    return;
+  }
+  const pending = Number(application.status) === 1;
+  openModal(`
+    <h2 class="modal-title">接单员实名认证</h2>
+    <p class="modal-note">申请人 ${escapeHtml(application.nickname || "")} · ${escapeHtml(application.uid || "")} · 当前余额 ¥${money(application.balance)} · 信用分 ${application.credit_score}</p>
+    <div class="summary-list">
+      <div class="summary-row"><span>真实姓名</span><strong>${escapeHtml(application.real_name)}</strong></div>
+      <div class="summary-row"><span>身份证号</span><strong id="maskedIdCard">${escapeHtml(application.id_card_masked)}</strong></div>
+      <div class="summary-row"><span>联系手机号</span><strong>${escapeHtml(application.phone)}</strong></div>
+      <div class="summary-row"><span>所属社区</span><strong>${escapeHtml(application.community || "-")}</strong></div>
+      <div class="summary-row"><span>紧急联系人</span><strong>${escapeHtml(application.emergency_contact || "-")}</strong></div>
+      <div class="summary-row"><span>应缴保证金</span><strong>¥${money(application.deposit_amount)}</strong></div>
+      <div class="summary-row"><span>保证金状态</span><strong>${depositStatusText(application.deposit_status)}</strong></div>
+      <div class="summary-row"><span>提交时间</span><strong>${escapeHtml(application.applied_at || "-")}</strong></div>
+      ${application.reviewed_at ? `<div class="summary-row"><span>上次审核</span><strong>${escapeHtml(`${application.review_note || "无意见"}（${application.reviewed_at}）`)}</strong></div>` : ""}
+    </div>
+    <div class="field">
+      <label>身份证照片</label>
+      <div class="evidence-row">
+        <img class="evidence-thumb" src="${escapeHtml(application.id_card_front)}" alt="身份证正面">
+        <img class="evidence-thumb" src="${escapeHtml(application.id_card_back)}" alt="身份证反面">
+      </div>
+    </div>
+    <div class="field">
+      <label>完整身份证号（查看行为会记入操作日志）</label>
+      <div class="toolbar">
+        <button class="secondary-button" data-reveal-idcard="${application.id}">查看完整号码</button>
+      </div>
+    </div>
+    ${
+      pending
+        ? `
+    <div class="field">
+      <label>审核意见</label>
+      <textarea class="textarea" id="acceptorReviewNote" placeholder="驳回时必须填写原因，例如：证件照片模糊，请重新上传">${escapeHtml(application.review_note || "")}</textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="ghost-button" data-modal-close>稍后处理</button>
+      <button class="danger-button" data-reject-acceptor="${application.id}">驳回申请</button>
+      <button class="primary-button" data-approve-acceptor="${application.id}">通过实名认证</button>
+    </div>`
+        : `
+    <div class="modal-actions"><button class="ghost-button" data-modal-close>关闭</button></div>`
+    }
+  `);
+}
+
+async function reviewAcceptor(applicationId, approved) {
+  const noteField = document.getElementById("acceptorReviewNote");
+  const reviewNote = noteField ? noteField.value.trim() : "";
+  if (!approved && !reviewNote) {
+    showToast("驳回时必须填写审核意见");
+    return;
+  }
+  try {
+    await api(`/api/admin/acceptor-profiles/${applicationId}/review`, {
+      method: "PUT",
+      body: { approved, reviewNote },
+    });
+    closeModal();
+    showToast(approved ? "已通过实名认证，申请人可缴纳保证金" : "已驳回认证申请");
+    await renderSection("acceptors");
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+async function revealIdCard(applicationId) {
+  try {
+    const data = await api(`/api/admin/acceptor-profiles/${applicationId}/id-card`);
+    const target = document.getElementById("maskedIdCard");
+    if (target) target.textContent = data.id_card_no;
+    showToast("完整号码已显示，本次查看已记入操作日志");
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
 async function renderAnnouncements(content) {
   const announcements = await api("/api/admin/announcements");
   state.data.announcements = announcements;
@@ -517,6 +710,11 @@ const LOG_ACTION_TEXT = {
   set_user_status: "用户启停",
   set_task_status: "任务状态变更",
   upload_image: "图片上传",
+  submit_acceptor_apply: "提交接单员认证",
+  review_acceptor: "接单员认证审核",
+  pay_acceptor_deposit: "缴纳接单员保证金",
+  quit_acceptor: "退出接单员",
+  view_id_card: "查看完整身份证号",
 };
 
 async function renderLogs(content) {
@@ -784,6 +982,20 @@ app.addEventListener("click", async (event) => {
     return;
   }
 
+  const searchAcceptors = event.target.closest("#searchAcceptors");
+  if (searchAcceptors) {
+    state.data.acceptorKeyword = document.getElementById("acceptorKeyword").value.trim();
+    state.data.acceptorStatus = document.getElementById("acceptorStatus").value;
+    await renderSection("acceptors");
+    return;
+  }
+
+  const reviewAcceptorBtn = event.target.closest("[data-review-acceptor]");
+  if (reviewAcceptorBtn) {
+    openAcceptorEditor(findAcceptor(reviewAcceptorBtn.dataset.reviewAcceptor));
+    return;
+  }
+
   const handleComplaint = event.target.closest("[data-handle-complaint]");
   if (handleComplaint) {
     const complaint = state.data.complaints.find(
@@ -866,6 +1078,10 @@ document.getElementById("adminApp").addEventListener("change", async (event) => 
     state.data.orderStatus = event.target.value;
     await renderSection("orders");
   }
+  if (event.target.id === "acceptorStatus") {
+    state.data.acceptorStatus = event.target.value;
+    await renderSection("acceptors");
+  }
 });
 
 modalBackdrop.addEventListener("click", (event) => {
@@ -873,6 +1089,24 @@ modalBackdrop.addEventListener("click", (event) => {
 });
 
 modalBackdrop.addEventListener("click", async (event) => {
+  const revealIdCard = event.target.closest("[data-reveal-idcard]");
+  if (revealIdCard) {
+    await revealIdCard(revealIdCard.dataset.revealIdcard);
+    return;
+  }
+
+  const approveAcceptor = event.target.closest("[data-approve-acceptor]");
+  if (approveAcceptor) {
+    await reviewAcceptor(approveAcceptor.dataset.approveAcceptor, true);
+    return;
+  }
+
+  const rejectAcceptor = event.target.closest("[data-reject-acceptor]");
+  if (rejectAcceptor) {
+    await reviewAcceptor(rejectAcceptor.dataset.rejectAcceptor, false);
+    return;
+  }
+
   const saveCategory = event.target.closest("[data-save-category]");
   if (saveCategory) {
     const id = saveCategory.dataset.saveCategory;

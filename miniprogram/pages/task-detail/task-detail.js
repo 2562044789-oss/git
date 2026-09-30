@@ -54,9 +54,19 @@ Page({
       setTimeout(() => {
         wx.navigateTo({ url: `/pages/order-detail/order-detail?id=${order.id}` });
       }, 500);
+    } catch (error) {
+      // 未完成实名认证 / 未缴保证金时后端返回 403，直接引导到认证页，
+      // 顺带把后端给出的具体原因（缺哪一步）带过去提示用户。
+      if (Number(error.statusCode) === 403) {
+        this.goCertify();
+      }
     } finally {
       this.setData({ accepting: false });
     }
+  },
+
+  goCertify() {
+    wx.navigateTo({ url: "/pages/acceptor/acceptor" });
   },
 
   cancelTask() {

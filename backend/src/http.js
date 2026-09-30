@@ -12,6 +12,12 @@ class HttpError extends Error {
 
 const rateLimitStore = new Map();
 
+// 限流只对"显式关闭"生效的逃生口：自动化测试会在几秒内创建几十个用户、
+// 反复调用同一批接口（登录 / 充值 / 认证申请），必然超出按分钟计的阈值。
+// 该开关默认关闭——不设置 RATE_LIMIT_DISABLED 时行为与之前完全一致，
+// 生产部署不会因为忘记配置而失去防护。
+const RATE_LIMIT_DISABLED = process.env.RATE_LIMIT_DISABLED === "1";
+
 // 周期性清理过期的限流计数，避免长时间运行后 Map 无限增长
 setInterval(() => {
   const nowTs = Date.now();
@@ -22,6 +28,7 @@ setInterval(() => {
 
 // 限流：单进程内存实现，按客户端标识 + 业务桶计数
 function enforceRateLimit(req, bucket, limit = 120, windowMs = 60_000) {
+  if (RATE_LIMIT_DISABLED) return;
   const key = `${clientAddress(req)}:${bucket}`;
   const current = rateLimitStore.get(key) || { count: 0, resetAt: Date.now() + windowMs };
   if (current.resetAt < Date.now()) {

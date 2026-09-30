@@ -49,6 +49,27 @@ function money(value) {
   return Number(value || 0).toFixed(2);
 }
 
+// 接单员认证状态：0 未申请 / 1 待审核 / 2 待缴保证金 / 3 已认证 / 4 未通过 / 5 已退出
+const ACCEPTOR_STATUS_TEXT = {
+  0: "未认证",
+  1: "审核中",
+  2: "待缴保证金",
+  3: "已认证",
+  4: "审核未通过",
+  5: "已退出",
+};
+
+function acceptorOf() {
+  return state.user?.acceptor || null;
+}
+
+function acceptorMenuSubtitle() {
+  const info = acceptorOf();
+  if (!info) return "实名认证后可接单";
+  if (info.can_accept) return "已认证 · 可接单";
+  return info.status_text || ACCEPTOR_STATUS_TEXT[Number(info.status)] || "未认证";
+}
+
 function statusMeta(status, kind = "task") {
   const taskMap = {
     0: ["待接单", "green"],
@@ -112,7 +133,11 @@ async function api(path, options = {}) {
     return api(path, options);
   }
   if (!response.ok || payload.code !== 200) {
-    throw new Error(payload.msg || "请求失败");
+    const error = new Error(payload.msg || "请求失败");
+    // 附带 HTTP 状态码：接单被认证门槛拦截时前端要据此弹出"去认证"引导
+    error.status = response.status;
+    error.code = payload.code;
+    throw error;
   }
   return payload.data;
 }
@@ -472,8 +497,26 @@ async function renderProfile() {
         <div class="stat"><strong>${state.user.stats.accepted}</strong><small>我接取的</small></div>
         <div class="stat"><strong>${state.user.stats.completed}</strong><small>已完成</small></div>
       </section>
+      ${
+        acceptorOf()?.can_accept
+          ? `<section class="info-card" style="margin-top:12px">
+              <div class="row-between">
+                <div>
+                  <strong>接单员已认证</strong>
+                  <p class="view-subtitle">保证金 ¥${money(acceptorOf().required_deposit)} 托管中，可正常接单</p>
+                </div>
+                <span class="status green">可接单</span>
+              </div>
+            </section>`
+          : `<section class="info-card" style="margin-top:12px">
+              <strong>你还不是接单员</strong>
+              <p class="view-subtitle">${escapeHtml(acceptorOf()?.blocked_reason || "完成实名认证并缴纳保证金后，才能接取邻居的跑腿单")}</p>
+              <button class="primary-button" style="margin-top:10px" data-action="acceptor">${Number(acceptorOf()?.status) === 1 ? "查看审核进度" : "申请成为接单员"}</button>
+            </section>`
+      }
       <div class="menu-list">
         ${[
+          ["acceptor", "证", "接单员认证", acceptorMenuSubtitle()],
           ["messages", "信", "消息中心", "订单进度与社区通知"],
           ["wallet", "¥", "我的钱包", "余额与收支明细"],
           ["addresses", "址", "常用地址", "管理服务与收件地址"],
@@ -520,12 +563,19 @@ async function openTask(id) {
         </div>
         <div class="inline-note">期望完成：${escapeHtml(task.expect_time || "待协商")} · 发布者：${escapeHtml(task.publisher_name)}</div>
       </div>
+      ${
+        task.accept_blocked_reason
+          ? `<p class="inline-note" style="color:#C9861A;margin-top:10px">${escapeHtml(task.accept_blocked_reason)}</p>`
+          : ""
+      }
       <div class="modal-actions">
         <button class="ghost-button" data-modal-close>关闭</button>
         ${
           task.can_accept
             ? `<button class="primary-button" data-accept-task="${task.id}">立即接单</button>`
-            : `<button class="primary-button" disabled>${task.publisher_id === state.user?.id ? "我发布的任务" : "当前不可接单"}</button>`
+            : task.accept_blocked_reason
+              ? `<button class="primary-button" data-go-acceptor>去认证后接单</button>`
+              : `<button class="primary-button" disabled>${task.publisher_id === state.user?.id ? "我发布的任务" : "当前不可接单"}</button>`
         }
       </div>
     </div>
@@ -587,6 +637,99 @@ async function openOrder(id) {
 }
 
 async function openPanel(type) {
+  if (type === "acceptor") {
+    const info = await api("/api/acceptor/profile");
+    const status = Number(info.status);
+    const profile = info.profile;
+    const stickerColor = status === 3 ? "green" : [1, 2].includes(status) ? "orange" : status === 4 ? "red" : "gray";
+    // 演示用：证件照片预填示例图，避免演示时还要临时找图片文件
+    state.acceptorFront = state.acceptorFront || "/preview/demo-proof.svg";
+    state.acceptorBack = state.acceptorBack || "/preview/demo-proof.svg";
+    const canApply = [0, 4, 5].includes(status);
+    openModal(`
+      <h2 class="modal-title">接单员认证</h2>
+      <p class="modal-note">完成实名认证并缴纳 ¥${money(info.required_deposit)} 保证金后才能接单；保证金在退出时原路退还</p>
+      <div class="info-card">
+        <div class="row-between">
+          <span>当前状态</span>
+          <span class="status ${stickerColor}">${escapeHtml(info.status_text || ACCEPTOR_STATUS_TEXT[status])}</span>
+        </div>
+        ${
+          profile
+            ? `
+        <div class="row-between" style="margin-top:10px"><span>真实姓名</span><strong>${escapeHtml(profile.real_name)}</strong></div>
+        <div class="row-between" style="margin-top:10px"><span>身份证号</span><strong>${escapeHtml(profile.id_card_masked)}</strong></div>
+        <div class="row-between" style="margin-top:10px"><span>联系手机号</span><strong>${escapeHtml(profile.phone)}</strong></div>
+        <div class="row-between" style="margin-top:10px"><span>保证金</span><strong>¥${money(profile.deposit_amount)}</strong></div>`
+            : `<p class="view-subtitle" style="margin-top:10px">你还没有提交过认证资料。认证需要身份证号、手机号和身份证正反面照片。</p>`
+        }
+      </div>
+      ${
+        canApply
+          ? `
+      <div class="info-card" style="margin-top:12px">
+        <h3 class="section-title">填写实名信息</h3>
+        <div class="field"><label class="field-label">真实姓名</label><input class="input" id="acceptorName" placeholder="需与身份证一致" value="${escapeHtml(profile?.real_name || "")}"></div>
+        <div class="field"><label class="field-label">身份证号</label><input class="input" id="acceptorIdCard" maxlength="18" inputmode="numeric" placeholder="18 位身份证号"></div>
+        <div class="field"><label class="field-label">联系手机号</label><input class="input" id="acceptorPhone" maxlength="11" inputmode="numeric" placeholder="11 位手机号" value="${escapeHtml(profile?.phone || state.user?.phone || "")}"></div>
+        <div class="field"><label class="field-label">紧急联系人（选填）</label><input class="input" id="acceptorEmergency" placeholder="姓名与联系电话" value="${escapeHtml(profile?.emergency_contact || "")}"></div>
+        <div class="field">
+          <label class="field-label">身份证照片（演示已预填示例图，可点击下方按钮更换）</label>
+          <div class="image-preview-row">
+            <img class="image-preview-thumb" id="acceptorPhotoFront" src="${escapeHtml(state.acceptorFront)}" alt="身份证正面">
+            <img class="image-preview-thumb" id="acceptorPhotoBack" src="${escapeHtml(state.acceptorBack)}" alt="身份证反面">
+          </div>
+          <div class="two-columns" style="margin-top:8px">
+            <label class="ghost-button" style="text-align:center">更换正面<input type="file" accept="image/*" hidden id="acceptorFrontFile"></label>
+            <label class="ghost-button" style="text-align:center">更换反面<input type="file" accept="image/*" hidden id="acceptorBackFile"></label>
+          </div>
+        </div>
+        <p class="inline-note">身份证号仅用于实名核验，展示与接口返回一律脱敏，完整号码只有超级管理员可查看且会记录日志。</p>
+        ${status === 4 && profile?.review_note ? `<p class="inline-note" style="color:#EA6668">上次未通过原因：${escapeHtml(profile.review_note)}</p>` : ""}
+      </div>
+      <div class="modal-actions">
+        <button class="ghost-button" data-modal-close>取消</button>
+        <button class="primary-button" data-submit-acceptor>提交认证申请</button>
+      </div>`
+          : ""
+      }
+      ${
+        status === 1
+          ? `<div class="info-card" style="margin-top:12px">
+              <p class="view-subtitle">资料已提交，管理员核验通过后即可缴纳保证金。审核期间你仍然可以正常发布任务。</p>
+            </div>
+            <div class="modal-actions"><button class="ghost-button" data-modal-close>关闭</button></div>`
+          : ""
+      }
+      ${
+        status === 2
+          ? `<div class="info-card" style="margin-top:12px">
+              <div class="row-between"><span>实名认证</span><span class="status green">已通过</span></div>
+              <p class="view-subtitle" style="margin-top:10px">缴纳 ¥${money(info.required_deposit)} 保证金后即可开始接单，保证金在退出时原路退还。</p>
+              <div class="wallet-summary"><div><div class="view-subtitle">当前可用余额</div><div class="balance">¥ ${money(state.user?.balance)}</div></div></div>
+            </div>
+            <div class="modal-actions">
+              <button class="ghost-button" data-modal-close>稍后缴纳</button>
+              <button class="primary-button" data-pay-deposit>缴纳保证金 ¥${money(info.required_deposit)}</button>
+            </div>`
+          : ""
+      }
+      ${
+        status === 3
+          ? `<div class="info-card" style="margin-top:12px">
+              <div class="row-between"><span>接单资格</span><span class="status green">可接单</span></div>
+              <p class="view-subtitle" style="margin-top:10px">保证金 ¥${money(profile?.deposit_amount)} 托管中。退出接单员后保证金将立即退回钱包余额，但需先结清进行中的订单。</p>
+            </div>
+            <div class="modal-actions">
+              <button class="ghost-button" data-modal-close>关闭</button>
+              <button class="danger-button" data-quit-acceptor>退出接单员并退还保证金</button>
+            </div>`
+          : ""
+      }
+    `);
+    return;
+  }
+
   if (type === "messages") {
     const messages = await api("/api/messages");
     openModal(`
@@ -750,6 +893,79 @@ async function handlePublishImagesChange(event) {
   event.target.value = "";
 }
 
+async function handleAcceptorPhotoChange(event, side) {
+  const file = (event.target.files || [])[0];
+  if (!file) return;
+  const preview = document.getElementById(side === "front" ? "acceptorPhotoFront" : "acceptorPhotoBack");
+  try {
+    const dataUrl = await readFileAsDataUrl(file);
+    const result = await api("/api/upload", { method: "POST", body: { dataUrl } });
+    if (side === "front") state.acceptorFront = result.url;
+    else state.acceptorBack = result.url;
+    if (preview) preview.src = result.url;
+    showToast("证件照片已更新");
+  } catch (error) {
+    showToast(error.message || "图片上传失败");
+  }
+  event.target.value = "";
+}
+
+// 提交实名认证申请。身份证号与照片只在提交时上行一次，
+// 之后所有读取路径返回的都是脱敏号码。
+async function submitAcceptorApply() {
+  const realName = document.getElementById("acceptorName")?.value.trim() || "";
+  const idCardNo = document.getElementById("acceptorIdCard")?.value.trim() || "";
+  const phone = document.getElementById("acceptorPhone")?.value.trim() || "";
+  const emergencyContact = document.getElementById("acceptorEmergency")?.value.trim() || "";
+  if (!realName || !idCardNo || !phone) {
+    showToast("请填写真实姓名、身份证号与手机号");
+    return;
+  }
+  try {
+    await api("/api/acceptor/apply", {
+      method: "POST",
+      body: {
+        realName,
+        idCardNo,
+        phone,
+        emergencyContact,
+        idCardFront: state.acceptorFront,
+        idCardBack: state.acceptorBack,
+      },
+    });
+    showToast("认证资料已提交，请等待管理员审核");
+    closeModal();
+    await refreshProfile();
+    await renderProfile();
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+async function payAcceptorDeposit() {
+  try {
+    await api("/api/acceptor/deposit", { method: "POST" });
+    showToast("保证金已缴纳，你现在可以接单了");
+    closeModal();
+    await Promise.all([refreshProfile(), loadTasks()]);
+    await renderProfile();
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+async function quitAcceptor() {
+  try {
+    await api("/api/acceptor/quit", { method: "POST" });
+    showToast("已退出接单员，保证金已退回余额");
+    closeModal();
+    await Promise.all([refreshProfile(), loadTasks()]);
+    await renderProfile();
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
 async function publishTask() {
   const form = document.getElementById("publishForm");
   const values = new FormData(form);
@@ -781,6 +997,13 @@ async function acceptTask(id) {
     state.orderRole = "accepted";
     await openOrder(order.id);
   } catch (error) {
+    // 被实名认证/保证金门槛拦截（403）时，直接引导到认证面板，而不是只弹一句报错
+    if (error.status === 403) {
+      showToast(error.message);
+      closeModal();
+      await openPanel("acceptor");
+      return;
+    }
     showToast(error.message);
   }
 }
@@ -1029,6 +1252,55 @@ modalBackdrop.addEventListener("click", async (event) => {
   const reviewSubmit = event.target.closest("[data-submit-review]");
   if (reviewSubmit) {
     await submitReview(reviewSubmit.dataset.submitReview);
+    return;
+  }
+
+  // 弹窗挂在 #app 之外，所以 #app 上的 data-action 分发接不到这里的事件。
+  // 消息中心的"全部已读"就是靠这里兜底，否则按钮点了没反应。
+  const modalAction = event.target.closest("[data-action]");
+  if (modalAction && modal.contains(modalAction)) {
+    const action = modalAction.dataset.action;
+    if (action === "read-all") {
+      await api("/api/messages/read-all", { method: "POST" });
+      await refreshProfile();
+      showToast("已全部标为已读");
+      closeModal();
+    } else {
+      await openPanel(action);
+    }
+    return;
+  }
+
+  // ---- 接单员认证相关动作 ----
+  // 任务详情里"去认证后接单"：关掉当前弹窗再打开认证面板
+  if (event.target.closest("[data-go-acceptor]")) {
+    await openPanel("acceptor");
+    return;
+  }
+
+  if (event.target.closest("[data-submit-acceptor]")) {
+    await submitAcceptorApply();
+    return;
+  }
+
+  if (event.target.closest("[data-pay-deposit]")) {
+    await payAcceptorDeposit();
+    return;
+  }
+
+  if (event.target.closest("[data-quit-acceptor]")) {
+    if (!window.confirm("退出接单员后保证金将退回余额，确定退出吗？")) return;
+    await quitAcceptor();
+    return;
+  }
+});
+
+// 认证表单里的身份证正反面照片选择：弹窗挂在 modalBackdrop 下，需单独绑定
+modalBackdrop.addEventListener("change", async (event) => {
+  if (event.target.id === "acceptorFrontFile") {
+    await handleAcceptorPhotoChange(event, "front");
+  } else if (event.target.id === "acceptorBackFile") {
+    await handleAcceptorPhotoChange(event, "back");
   }
 });
 

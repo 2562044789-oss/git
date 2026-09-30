@@ -131,7 +131,11 @@ App({
             if (!silent) {
               wx.showToast({ title: payload.msg || "请求失败", icon: "none" });
             }
-            reject(new Error(payload.msg || "请求失败"));
+            const error = new Error(payload.msg || "请求失败");
+            // 附带 HTTP 状态码：页面可据此区分"接单被认证门槛拦截(403)"等场景
+            error.statusCode = response.statusCode;
+            error.bizCode = payload.code;
+            reject(error);
           },
           fail: (error) => {
             const reason = String(error && error.errMsg ? error.errMsg : "");

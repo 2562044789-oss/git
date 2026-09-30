@@ -1,0 +1,171 @@
+<view class="page page-no-tab acceptor-page">
+  <view class="acceptor-hero">
+    <view class="acceptor-hero-head">
+      <view>
+        <view class="acceptor-hero-title">接单员认证</view>
+        <view class="acceptor-hero-sub">完成实名认证并缴纳 ¥{{requiredDepositText}} 保证金后即可接单</view>
+      </view>
+      <view class="status {{statusClass}}">{{statusText}}</view>
+    </view>
+  </view>
+
+  <!-- 已有资料时的摘要 -->
+  <view wx:if="{{profile}}" class="card summary-card">
+    <view class="summary-row">
+      <text>真实姓名</text>
+      <text class="summary-strong">{{profile.real_name}}</text>
+    </view>
+    <view class="summary-row">
+      <text>身份证号</text>
+      <text class="summary-strong">{{profile.id_card_masked}}</text>
+    </view>
+    <view class="summary-row">
+      <text>联系手机号</text>
+      <text class="summary-strong">{{profile.phone}}</text>
+    </view>
+    <view class="summary-row">
+      <text>保证金</text>
+      <text class="summary-strong">¥{{depositAmountText}}</text>
+    </view>
+    <view wx:if="{{status === 4 && profile.review_note}}" class="reject-note">
+      上次未通过原因：{{profile.review_note}}
+    </view>
+  </view>
+
+  <view wx:if="{{!profile}}" class="card empty-card">
+    你还没有提交过认证资料。认证需要身份证号、手机号和身份证正反面照片。
+  </view>
+
+  <!-- 申请 / 重新申请表单 -->
+  <view wx:if="{{canApply}}" class="card form-card">
+    <view class="form-title">填写实名信息</view>
+
+    <view class="field">
+      <view class="field-label">真实姓名</view>
+      <input
+        class="input"
+        value="{{realName}}"
+        data-field="realName"
+        placeholder="需与身份证一致"
+        placeholder-class="input-placeholder"
+        bindinput="onFormInput"
+      />
+    </view>
+
+    <view class="field">
+      <view class="field-label">身份证号</view>
+      <input
+        class="input"
+        value="{{idCardNo}}"
+        data-field="idCardNo"
+        maxlength="18"
+        type="idcard"
+        placeholder="18 位身份证号"
+        placeholder-class="input-placeholder"
+        bindinput="onFormInput"
+      />
+    </view>
+
+    <view class="field">
+      <view class="field-label">联系手机号</view>
+      <input
+        class="input"
+        value="{{phone}}"
+        data-field="phone"
+        maxlength="11"
+        type="number"
+        placeholder="11 位手机号"
+        placeholder-class="input-placeholder"
+        bindinput="onFormInput"
+      />
+    </view>
+
+    <view class="field">
+      <view class="field-label">紧急联系人（选填）</view>
+      <input
+        class="input"
+        value="{{emergencyContact}}"
+        data-field="emergencyContact"
+        placeholder="姓名与联系电话"
+        placeholder-class="input-placeholder"
+        bindinput="onFormInput"
+      />
+    </view>
+
+    <view class="field">
+      <view class="field-label">身份证照片</view>
+      <view class="photo-row">
+        <view class="photo-box" data-side="front" bindtap="choosePhoto">
+          <image wx:if="{{idCardFrontUrl}}" class="photo-img" src="{{idCardFrontUrl}}" mode="aspectFill"></image>
+          <view wx:else class="photo-placeholder">＋ 身份证正面</view>
+        </view>
+        <view class="photo-box" data-side="back" bindtap="choosePhoto">
+          <image wx:if="{{idCardBackUrl}}" class="photo-img" src="{{idCardBackUrl}}" mode="aspectFill"></image>
+          <view wx:else class="photo-placeholder">＋ 身份证反面</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="form-note">
+      身份证号仅用于实名核验，展示与接口返回一律脱敏；完整号码只有社区超级管理员可查看，且每次查看都会记录日志。
+    </view>
+
+    <button
+      class="primary-button form-submit"
+      loading="{{submitting}}"
+      disabled="{{submitting}}"
+      bindtap="submitApply"
+    >
+      {{submitting ? '提交中' : '提交认证申请'}}
+    </button>
+  </view>
+
+  <!-- 审核中 -->
+  <view wx:if="{{status === 1}}" class="card state-card">
+    <view class="state-title">资料已提交，等待审核</view>
+    <view class="state-text">社区管理员核验通过后即可缴纳保证金。审核期间你仍然可以正常发布任务，但还不能接单。</view>
+  </view>
+
+  <!-- 待缴保证金 -->
+  <view wx:if="{{status === 2}}" class="card state-card">
+    <view class="state-line">
+      <text>实名认证</text>
+      <view class="status status-green">已通过</view>
+    </view>
+    <view class="state-text">缴纳 ¥{{requiredDepositText}} 保证金后即可开始接单，保证金在退出接单员时原路退还。</view>
+    <view class="balance-line">当前可用余额 <text class="balance-amount">¥{{balanceText}}</text></view>
+    <button
+      class="primary-button state-button"
+      loading="{{paying}}"
+      disabled="{{paying}}"
+      bindtap="payDeposit"
+    >
+      缴纳保证金 ¥{{requiredDepositText}}
+    </button>
+  </view>
+
+  <!-- 已认证 -->
+  <view wx:if="{{status === 3}}" class="card state-card">
+    <view class="state-line">
+      <text>接单资格</text>
+      <view class="status status-green">可接单</view>
+    </view>
+    <view class="state-text">保证金 ¥{{depositAmountText}} 托管中。退出接单员后保证金会立即退回钱包余额，但需先结清进行中的订单。</view>
+    <button
+      class="danger-button state-button"
+      loading="{{quitting}}"
+      disabled="{{quitting}}"
+      bindtap="quitAcceptor"
+    >
+      退出接单员并退还保证金
+    </button>
+  </view>
+
+  <view class="policy-card">
+    <view class="policy-mark">✓</view>
+    <view>
+      <view class="policy-title">为什么要实名与保证金</view>
+      <view class="policy-text">实名认证保障双方人身与财产安全；保证金用于约束接单后的履约行为，正常退出时全额退还。</view>
+    </view>
+  </view>
+</view>
