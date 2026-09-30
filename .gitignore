@@ -1,0 +1,16 @@
+backend/data/*.sqlite
+backend/data/*.sqlite-shm
+backend/data/*.sqlite-wal
+backend/data/*.key
+backend/public/uploads/*
+!backend/public/uploads/.gitkeep
+node_modules/
+.DS_Store
+Thumbs.db
+*.log
+
+# 本地数据库备份目录（仅作回滚用，不入库）
+backend/data/backup-*/
+
+# 开发者工具私有配置（含真实小程序 AppID，仅本地使用，不应公开）
+miniprogram/project.private.config.json

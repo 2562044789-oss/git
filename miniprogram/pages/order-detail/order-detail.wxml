@@ -1,0 +1,159 @@
+<view wx:if="{{order}}" class="order-detail-page">
+  <view class="status-hero">
+    <view class="status-topline">
+      <view class="status {{order.statusClass}}">{{order.statusText}}</view>
+      <view class="order-no">{{order.order_no}}</view>
+    </view>
+    <view class="status-title">
+      {{order.status === 5 ? '订单争议处理中，操作已暂停' :
+        order.status === 1 ? '邻居已接单，正在准备服务' :
+        order.status === 2 && order.task_status === 2 ? '服务进行中，等待接单者提交完成' :
+        order.status === 2 ? '接单者已完成，等待发布者确认' :
+        order.status === 3 ? '订单已完成，感谢邻里互助' :
+        order.status === 4 ? '订单已取消' : '订单处理中'}}
+    </view>
+    <view class="status-tip">
+      {{order.status === 5 ? '托管资金已暂时冻结，等待管理员裁决，结果会通过消息通知双方。' :
+      order.status === 2 && order.task_status === 2 ? '接单者完成任务后可上传照片，双方确认后再结算。' :
+      order.status === 2 ? '请核对完成照片，确认无误后结算报酬。' : '费用由平台托管，确认完成后再结算。'}}
+    </view>
+  </view>
+
+  <view class="detail-body">
+    <view class="timeline-card card">
+      <view class="card-title">订单进度</view>
+      <view class="timeline">
+        <view wx:for="{{timeline}}" wx:key="title" class="timeline-step {{item.done ? 'done' : ''}}">
+          <view class="step-axis">
+            <view class="step-dot">{{item.done ? '✓' : '·'}}</view>
+            <view wx:if="{{index < timeline.length - 1}}" class="step-line"></view>
+          </view>
+          <view class="step-content">
+            <view class="step-title">{{item.title}}</view>
+            <view class="step-time">{{item.time || '等待处理'}}</view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="route-card card">
+      <view class="card-title">任务与路线</view>
+      <view class="task-name">{{order.title}}</view>
+      <view class="task-description">{{order.description}}</view>
+      <view class="route-box">
+        <view class="route-row">
+          <view class="route-point start"></view>
+          <view>
+            <view class="route-label">服务地址</view>
+            <view class="route-value">{{order.pickup_address}}</view>
+          </view>
+        </view>
+        <view wx:if="{{order.category_address_mode !== 2}}" class="route-connector"></view>
+        <view wx:if="{{order.category_address_mode !== 2}}" class="route-row">
+          <view class="route-point end"></view>
+          <view>
+            <view class="route-label">送达地址</view>
+            <view class="route-value">{{order.delivery_address}}</view>
+          </view>
+        </view>
+      </view>
+      <view class="divider"></view>
+      <view class="meta-row"><text>期望完成</text><text>{{order.expect_time}}</text></view>
+      <view class="meta-row"><text>订单金额</text><text class="money">{{order.amount}}</text></view>
+    </view>
+
+    <view wx:if="{{order.completion_images.length}}" class="evidence-card card">
+      <view class="card-title">完成凭证</view>
+      <view class="evidence-tip">
+        {{isPublisher ? '请核对以下照片，确认无误后完成订单。' : '照片已提交，等待发布者确认。'}}
+      </view>
+      <view class="evidence-grid">
+        <image
+          wx:for="{{order.completion_images}}"
+          wx:key="*this"
+          src="{{item}}"
+          mode="aspectFill"
+          data-index="{{index}}"
+          bindtap="previewCompletion"
+        ></image>
+      </view>
+    </view>
+
+    <view class="people-card card">
+      <view class="card-title">订单双方</view>
+      <view class="person-row">
+        <view class="person-avatar">{{order.publisherInitials}}</view>
+        <view class="grow">
+          <view class="person-name">{{order.publisher_name}}</view>
+          <view class="muted">发布者</view>
+        </view>
+        <text class="person-role">发布</text>
+      </view>
+      <view class="person-row">
+        <view class="person-avatar acceptor">{{order.acceptorInitials}}</view>
+        <view class="grow">
+          <view class="person-name">{{order.acceptor_name}}</view>
+          <view class="muted">接单邻居</view>
+        </view>
+        <text class="person-role">接单</text>
+      </view>
+      <button class="contact-link" bindtap="contactPerson">查看联系方式</button>
+    </view>
+
+    <view wx:if="{{order.status === 3}}" class="completion-card card">
+      <view class="card-title">评价与售后</view>
+      <view class="completion-actions">
+        <button class="secondary-button small-action" bindtap="goReview">
+          {{reviewed ? '查看评价' : '评价邻居'}}
+        </button>
+        <button class="plain-action" bindtap="goComplaint">订单投诉</button>
+      </view>
+    </view>
+  </view>
+
+  <view class="bottom-actions safe-bottom">
+    <button
+      wx:if="{{isAcceptor && order.status === 1}}"
+      class="primary-button action-main"
+      loading="{{actionLoading}}"
+      bindtap="startService"
+    >
+      开始服务
+    </button>
+    <button
+      wx:elif="{{isAcceptor && order.task_status === 2 && order.status === 2}}"
+      class="primary-button action-main"
+      loading="{{actionLoading}}"
+      bindtap="finishService"
+    >
+      上传凭证并完成
+    </button>
+    <button
+      wx:elif="{{isPublisher && order.task_status === 3 && order.status === 2}}"
+      class="primary-button action-main"
+      loading="{{actionLoading}}"
+      bindtap="confirmOrder"
+    >
+      确认完成并结算
+    </button>
+    <button
+      wx:if="{{order.status === 1 || order.status === 2}}"
+      class="danger-button cancel-action"
+      bindtap="cancelOrder"
+    >
+      取消
+    </button>
+    <button
+      wx:if="{{order.status === 3 && !reviewed}}"
+      class="primary-button action-main"
+      bindtap="goReview"
+    >
+      去评价
+    </button>
+  </view>
+</view>
+
+<view wx:else class="page detail-loading">
+  <view class="loading-card"></view>
+  <view class="loading-card short"></view>
+</view>

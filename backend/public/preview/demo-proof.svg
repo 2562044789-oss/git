@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240" viewBox="0 0 320 240">
+  <rect width="320" height="240" rx="18" fill="#e6f4ea"/>
+  <rect x="48" y="34" width="224" height="172" rx="14" fill="#ffffff" stroke="#b9d8c4" stroke-width="3"/>
+  <circle cx="160" cy="108" r="37" fill="#e2f3e7" stroke="#4aa974" stroke-width="6"/>
+  <path d="m140 108 13 13 28-31" fill="none" stroke="#4aa974" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="160" y="176" fill="#45604f" font-family="Arial, sans-serif" font-size="18" text-anchor="middle">服务完成凭证</text>
+</svg>

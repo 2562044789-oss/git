@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  html,body{margin:0;padding:0;background:#ffffff;}
+  text{font-family:"SimSun","宋体",serif;fill:#000;}
+</style>
+</head>
+<body>
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="880" viewBox="0 0 1400 880">
+  <!-- 标题 -->
+  <text x="700" y="36" font-size="24" font-weight="bold" text-anchor="middle">阳光社区邻里快办服务系统功能模块图</text>
+
+  <!-- 顶层系统框 -->
+  <rect x="560" y="56" width="280" height="46" fill="none" stroke="#000" stroke-width="2"/>
+  <text x="700" y="85" font-size="18" font-weight="bold" text-anchor="middle">系统总体</text>
+
+  <!-- 主干连线：系统下沿 → 横向总线 → 三列 -->
+  <line x1="700" y1="102" x2="700" y2="126" stroke="#000" stroke-width="1.5"/>
+  <line x1="270" y1="126" x2="1130" y2="126" stroke="#000" stroke-width="1.5"/>
+  <line x1="270" y1="126" x2="270" y2="150" stroke="#000" stroke-width="1.5"/>
+  <line x1="700" y1="126" x2="700" y2="150" stroke="#000" stroke-width="1.5"/>
+  <line x1="1130" y1="126" x2="1130" y2="150" stroke="#000" stroke-width="1.5"/>
+
+  <!-- ===== 第一列：小程序用户端 ===== -->
+  <rect x="70" y="150" width="400" height="38" fill="none" stroke="#000" stroke-width="1.5"/>
+  <text x="270" y="175" font-size="16" font-weight="bold" text-anchor="middle">小程序用户端</text>
+
+  <line x1="270" y1="188" x2="270" y2="732" stroke="#000" stroke-width="1"/>
+  <g font-size="13">
+    <line x1="270" y1="214" x2="95" y2="214" stroke="#000" stroke-width="1"/>
+    <rect x="95" y="188" width="350" height="52" fill="none" stroke="#000"/>
+    <text x="270" y="209" font-size="14" font-weight="bold" text-anchor="middle">用户认证模块</text>
+    <text x="110" y="230">微信登录、个人信息维护、地址管理</text>
+
+    <line x1="270" y1="296" x2="95" y2="296" stroke="#000" stroke-width="1"/>
+    <rect x="95" y="270" width="350" height="56" fill="none" stroke="#000"/>
+    <text x="270" y="291" font-size="14" font-weight="bold" text-anchor="middle">接单员认证模块</text>
+    <text x="110" y="312">身份证、手机号实名认证，保证金缴纳</text>
+
+    <line x1="270" y1="378" x2="95" y2="378" stroke="#000" stroke-width="1"/>
+    <rect x="95" y="352" width="350" height="52" fill="none" stroke="#000"/>
+    <text x="270" y="373" font-size="14" font-weight="bold" text-anchor="middle">任务发布模块</text>
+    <text x="110" y="394">任务编辑、酬金设置、资金托管、图片上传</text>
+
+    <line x1="270" y1="460" x2="95" y2="460" stroke="#000" stroke-width="1"/>
+    <rect x="95" y="434" width="350" height="52" fill="none" stroke="#000"/>
+    <text x="270" y="455" font-size="14" font-weight="bold" text-anchor="middle">任务大厅模块</text>
+    <text x="110" y="476">任务浏览、同社区排序、任务详情、接单</text>
+
+    <line x1="270" y1="542" x2="95" y2="542" stroke="#000" stroke-width="1"/>
+    <rect x="95" y="516" width="350" height="52" fill="none" stroke="#000"/>
+    <text x="270" y="537" font-size="14" font-weight="bold" text-anchor="middle">订单管理模块</text>
+    <text x="110" y="558">状态跟踪、凭证上传、确认结算、订单取消</text>
+
+    <line x1="270" y1="624" x2="95" y2="624" stroke="#000" stroke-width="1"/>
+    <rect x="95" y="598" width="350" height="52" fill="none" stroke="#000"/>
+    <text x="270" y="619" font-size="14" font-weight="bold" text-anchor="middle">评价投诉模块</text>
+    <text x="110" y="640">服务评价、投诉提交、凭证上传、结果通知</text>
+
+    <line x1="270" y1="706" x2="95" y2="706" stroke="#000" stroke-width="1"/>
+    <rect x="95" y="680" width="350" height="52" fill="none" stroke="#000"/>
+    <text x="270" y="701" font-size="14" font-weight="bold" text-anchor="middle">钱包管理模块</text>
+    <text x="110" y="722">余额、充值、保证金、收支流水、结算退款</text>
+  </g>
+
+  <!-- ===== 第二列：Web管理后台 ===== -->
+  <rect x="500" y="150" width="400" height="38" fill="none" stroke="#000" stroke-width="1.5"/>
+  <text x="700" y="175" font-size="16" font-weight="bold" text-anchor="middle">Web管理后台</text>
+
+  <line x1="700" y1="188" x2="700" y2="732" stroke="#000" stroke-width="1"/>
+  <g font-size="13">
+    <line x1="700" y1="214" x2="525" y2="214" stroke="#000" stroke-width="1"/>
+    <rect x="525" y="188" width="350" height="52" fill="none" stroke="#000"/>
+    <text x="700" y="209" font-size="14" font-weight="bold" text-anchor="middle">管理员认证模块</text>
+    <text x="540" y="230">管理员登录、权限校验、Token 鉴权</text>
+
+    <line x1="700" y1="296" x2="525" y2="296" stroke="#000" stroke-width="1"/>
+    <rect x="525" y="270" width="350" height="52" fill="none" stroke="#000"/>
+    <text x="700" y="291" font-size="14" font-weight="bold" text-anchor="middle">用户管理模块</text>
+    <text x="540" y="312">用户查询、启用/禁用、角色与信用管理</text>
+
+    <line x1="700" y1="378" x2="525" y2="378" stroke="#000" stroke-width="1"/>
+    <rect x="525" y="352" width="350" height="52" fill="none" stroke="#000"/>
+    <text x="700" y="373" font-size="14" font-weight="bold" text-anchor="middle">接单员审核模块</text>
+    <text x="540" y="394">实名审核、保证金核验、接单资格开通</text>
+
+    <line x1="700" y1="460" x2="525" y2="460" stroke="#000" stroke-width="1"/>
+    <rect x="525" y="434" width="350" height="52" fill="none" stroke="#000"/>
+    <text x="700" y="455" font-size="14" font-weight="bold" text-anchor="middle">订单管理模块</text>
+    <text x="540" y="476">订单查询、状态跟踪、异常订单处理</text>
+
+    <line x1="700" y1="544" x2="525" y2="544" stroke="#000" stroke-width="1"/>
+    <rect x="525" y="516" width="350" height="56" fill="none" stroke="#000"/>
+    <text x="700" y="537" font-size="14" font-weight="bold" text-anchor="middle">投诉裁决模块</text>
+    <text x="540" y="558">投诉受理、凭证查看、退款/结算/驳回裁决</text>
+
+    <line x1="700" y1="626" x2="525" y2="626" stroke="#000" stroke-width="1"/>
+    <rect x="525" y="600" width="350" height="52" fill="none" stroke="#000"/>
+    <text x="700" y="621" font-size="14" font-weight="bold" text-anchor="middle">内容管理模块</text>
+    <text x="540" y="642">分类管理、公告发布、任务下架</text>
+
+    <line x1="700" y1="708" x2="525" y2="708" stroke="#000" stroke-width="1"/>
+    <rect x="525" y="682" width="350" height="52" fill="none" stroke="#000"/>
+    <text x="700" y="703" font-size="14" font-weight="bold" text-anchor="middle">系统审计模块</text>
+    <text x="540" y="724">操作日志、资金追溯、数据统计看板</text>
+  </g>
+
+  <!-- ===== 第三列：后端支撑模块 ===== -->
+  <rect x="930" y="150" width="400" height="38" fill="none" stroke="#000" stroke-width="1.5"/>
+  <text x="1130" y="175" font-size="16" font-weight="bold" text-anchor="middle">后端支撑模块</text>
+
+  <line x1="1130" y1="188" x2="1130" y2="732" stroke="#000" stroke-width="1"/>
+  <g font-size="13">
+    <line x1="1130" y1="214" x2="955" y2="214" stroke="#000" stroke-width="1"/>
+    <rect x="955" y="188" width="350" height="52" fill="none" stroke="#000"/>
+    <text x="1130" y="209" font-size="14" font-weight="bold" text-anchor="middle">身份鉴权模块</text>
+    <text x="970" y="230">JWT 签发校验、角色拦截、接口限流</text>
+
+    <line x1="1130" y1="296" x2="955" y2="296" stroke="#000" stroke-width="1"/>
+    <rect x="955" y="270" width="350" height="52" fill="none" stroke="#000"/>
+    <text x="1130" y="291" font-size="14" font-weight="bold" text-anchor="middle">认证与保证金模块</text>
+    <text x="970" y="312">实名信息存储、保证金冻结与退还</text>
+
+    <line x1="1130" y1="378" x2="955" y2="378" stroke="#000" stroke-width="1"/>
+    <rect x="955" y="352" width="350" height="52" fill="none" stroke="#000"/>
+    <text x="1130" y="373" font-size="14" font-weight="bold" text-anchor="middle">订单业务模块</text>
+    <text x="970" y="394">订单分页、状态流转、事务防重复接单</text>
+
+    <line x1="1130" y1="460" x2="955" y2="460" stroke="#000" stroke-width="1"/>
+    <rect x="955" y="434" width="350" height="52" fill="none" stroke="#000"/>
+    <text x="1130" y="455" font-size="14" font-weight="bold" text-anchor="middle">资金结算模块</text>
+    <text x="970" y="476">酬金托管、完成结算、取消退款、流水记账</text>
+
+    <line x1="1130" y1="542" x2="955" y2="542" stroke="#000" stroke-width="1"/>
+    <rect x="955" y="516" width="350" height="52" fill="none" stroke="#000"/>
+    <text x="1130" y="537" font-size="14" font-weight="bold" text-anchor="middle">文件上传模块</text>
+    <text x="970" y="558">图片校验、服务端存储、访问地址返回</text>
+
+    <line x1="1130" y1="624" x2="955" y2="624" stroke="#000" stroke-width="1"/>
+    <rect x="955" y="598" width="350" height="52" fill="none" stroke="#000"/>
+    <text x="1130" y="619" font-size="14" font-weight="bold" text-anchor="middle">数据持久模块</text>
+    <text x="970" y="640">SQLite/MySQL、事务一致性、查询优化</text>
+
+    <line x1="1130" y1="706" x2="955" y2="706" stroke="#000" stroke-width="1"/>
+    <rect x="955" y="680" width="350" height="52" fill="none" stroke="#000"/>
+    <text x="1130" y="701" font-size="14" font-weight="bold" text-anchor="middle">接口服务模块</text>
+    <text x="970" y="722">RESTful 接口、消息推送、统一日志处理</text>
+  </g>
+
+</svg>
+</body>
+</html>

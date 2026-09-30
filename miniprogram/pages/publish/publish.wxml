@@ -1,0 +1,195 @@
+<view class="page publish-page">
+  <view class="page-title">发布邻里任务</view>
+  <view class="page-subtitle">信息写清楚，邻居更容易快速接单</view>
+
+  <view class="form-card card">
+    <view class="form-section">
+      <view class="form-section-title"><text class="step-number">1</text>选择服务类型</view>
+      <view class="category-grid">
+        <view
+          wx:for="{{categories}}"
+          wx:key="id"
+          class="category-option {{form.categoryId === item.id ? 'active' : ''}}"
+          data-id="{{item.id}}"
+          bindtap="selectCategory"
+        >
+          <view class="category-letter" style="color: {{item.color}};">{{item.name[0]}}</view>
+          <text>{{item.name}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="form-section">
+      <view class="form-section-title"><text class="step-number">2</text>填写任务信息</view>
+      <view class="field">
+        <text class="field-label">任务标题</text>
+        <input
+          class="input"
+          maxlength="30"
+          value="{{form.title}}"
+          placeholder="例如：帮忙取一下丰巢快递"
+          placeholder-class="input-placeholder"
+          data-field="title"
+          bindinput="updateField"
+        />
+      </view>
+      <view class="field">
+        <text class="field-label">任务说明</text>
+        <textarea
+          class="textarea"
+          maxlength="300"
+          value="{{form.description}}"
+          placeholder="说明物品、数量、注意事项和取件方式"
+          placeholder-class="input-placeholder"
+          data-field="description"
+          bindinput="updateField"
+        />
+        <view class="form-note">{{form.description.length}} / 300</view>
+      </view>
+      <view class="field">
+        <view class="field-label-row">
+          <text class="field-label">{{serviceOnly ? '服务地址' : '取件 / 服务地址'}}</text>
+          <text class="address-select-link" data-target="pickup" bindtap="openAddressPicker">选择常用地址</text>
+        </view>
+        <input
+          class="input"
+          value="{{form.pickupAddress}}"
+          placeholder="例如：东门丰巢柜"
+          placeholder-class="input-placeholder"
+          data-field="pickupAddress"
+          bindinput="updateField"
+        />
+      </view>
+      <view wx:if="{{deliveryRequired}}" class="field">
+        <view class="field-label-row">
+          <text class="field-label">送达地址</text>
+          <text class="address-select-link" data-target="delivery" bindtap="openAddressPicker">选择常用地址</text>
+        </view>
+        <input
+          class="input"
+          value="{{form.deliveryAddress}}"
+          placeholder="例如：12栋2单元602"
+          placeholder-class="input-placeholder"
+          data-field="deliveryAddress"
+          bindinput="updateField"
+        />
+      </view>
+      <view class="two-fields">
+        <view class="field">
+          <text class="field-label">联系人</text>
+          <input
+            class="input"
+            value="{{form.contactName}}"
+            placeholder="姓名"
+            placeholder-class="input-placeholder"
+            data-field="contactName"
+            bindinput="updateField"
+          />
+        </view>
+        <view class="field">
+          <text class="field-label">联系电话</text>
+          <input
+            class="input"
+            type="number"
+            value="{{form.contactPhone}}"
+            placeholder="手机号"
+            placeholder-class="input-placeholder"
+            data-field="contactPhone"
+            bindinput="updateField"
+          />
+        </view>
+      </view>
+      <view class="field">
+        <text class="field-label">期望完成时间</text>
+        <picker mode="date" value="{{form.expectTime}}" start="{{minDate}}" bindchange="selectTime">
+          <view class="picker {{form.expectTime ? '' : 'placeholder'}}">
+            {{form.expectTime || '请选择上门服务时间'}}
+          </view>
+        </picker>
+      </view>
+    </view>
+
+    <view class="form-section">
+      <view class="form-section-title"><text class="step-number">3</text>上传现场图片</view>
+      <view class="image-list">
+        <view wx:for="{{form.images}}" wx:key="*this" class="image-item">
+          <image src="{{item}}" mode="aspectFill"></image>
+          <view class="remove-image" data-index="{{index}}" bindtap="removeImage">×</view>
+        </view>
+        <view wx:if="{{form.images.length < 3}}" class="image-add" bindtap="chooseImages">
+          <text class="image-add-plus">＋</text>
+          <text>添加图片</text>
+        </view>
+      </view>
+      <view class="form-note">最多 3 张，仅用于说明任务内容</view>
+    </view>
+
+    <view class="form-section reward-section">
+      <view class="form-section-title"><text class="step-number">4</text>设置跑腿报酬</view>
+      <view class="quick-rewards">
+        <view
+          wx:for="{{quickRewards}}"
+          wx:key="*this"
+          class="reward-option {{form.reward == item ? 'active' : ''}}"
+          data-value="{{item}}"
+          bindtap="selectReward"
+        >
+          ¥{{item}}
+        </view>
+        <view class="reward-input-wrap">
+          <text>¥</text>
+          <input
+            class="reward-input"
+            type="digit"
+            value="{{form.reward}}"
+            placeholder="自定义"
+            placeholder-class="input-placeholder"
+            data-field="reward"
+            bindinput="updateField"
+          />
+        </view>
+      </view>
+      <view class="escrow-note">
+        <view class="shield-mark">✓</view>
+        <view>
+          <view class="escrow-title">平台托管保障</view>
+          <view class="escrow-text">报酬先托管，完成并确认后再结算给接单邻居。</view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <button class="primary-button submit-button" loading="{{submitting}}" disabled="{{submitting}}" bindtap="submit">
+    {{submitting ? '正在发布...' : '确认发布并托管报酬'}}
+  </button>
+
+  <view wx:if="{{addressPickerOpen}}" class="address-mask" bindtap="closeAddressPicker"></view>
+  <view wx:if="{{addressPickerOpen}}" class="address-picker safe-bottom">
+    <view class="address-picker-head">
+      <view>
+        <view class="address-picker-title">{{addressTarget === 'pickup' ? '选择取件/服务地址' : '选择送达地址'}}</view>
+        <view class="address-picker-subtitle">将自动填写地址、联系人和电话</view>
+      </view>
+      <view class="address-picker-close" bindtap="closeAddressPicker">×</view>
+    </view>
+    <scroll-view class="address-picker-list" scroll-y>
+      <view
+        wx:for="{{pickerAddresses}}"
+        wx:key="id"
+        class="address-option"
+        data-id="{{item.id}}"
+        bindtap="selectAddress"
+      >
+        <view class="address-option-head">
+          <text class="address-contact">{{item.contact_name}} {{item.phone}}</text>
+          <text wx:if="{{item.is_default}}" class="address-default">默认</text>
+        </view>
+        <view class="address-full">{{item.fullAddress}}</view>
+      </view>
+      <view wx:if="{{!pickerAddresses.length}}" class="address-empty">
+        {{addressTarget === 'pickup' ? '暂无取件/服务地址，请先新增' : '暂无送达地址，请先新增'}}
+      </view>
+    </scroll-view>
+    <button class="secondary-button address-manage-button" bindtap="goAddressManage">管理常用地址</button>
+  </view>
+</view>

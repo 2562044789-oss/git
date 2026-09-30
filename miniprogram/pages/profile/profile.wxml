@@ -1,0 +1,81 @@
+<view class="page profile-page">
+  <view class="profile-header">
+    <view class="profile-glow"></view>
+    <view class="profile-main">
+      <view class="avatar">{{profile ? profile.avatarText : '邻'}}</view>
+      <view class="profile-side grow">
+        <text class="profile-name">{{profile ? profile.nickname : '加载中'}}</text>
+        <button class="edit-button" style="width:128rpx;min-width:128rpx;max-width:128rpx;padding:0;" bindtap="editProfile">编辑名称</button>
+      </view>
+    </view>
+
+    <view class="uid-row">
+      <text class="uid-label">UID</text>
+      <text class="uid-value">{{profile ? profile.uidText : '--'}}</text>
+    </view>
+
+    <view class="identity-details">
+      <view class="detail-chip credit-chip">
+        <text class="detail-label">信誉分</text>
+        <text class="detail-value credit-value">{{profile ? profile.credit_score : '--'}}</text>
+      </view>
+      <view class="detail-chip community-chip" style="display:flex;flex-direction:row;align-items:center;"><text class="detail-label" style="flex:none;">所在社区</text><text class="detail-value community-value">{{profile ? profile.community : '阳光社区'}} · {{profile ? profile.building + profile.room : ''}}</text></view>
+    </view>
+
+    <view class="wallet-strip">
+      <view>
+        <view class="wallet-label">可用余额</view>
+        <view class="wallet-value">¥ {{profile ? profile.balanceText : '0.00'}}</view>
+      </view>
+      <view class="wallet-shortcut" data-key="wallet" bindtap="openMenu">收支明细 ›</view>
+    </view>
+  </view>
+
+  <view class="stats-row">
+    <view class="stat-item" bindtap="goPublished">
+      <text class="stat-value">{{profile ? profile.stats.published : 0}}</text>
+      <text class="stat-label">我发布的</text>
+    </view>
+    <view class="stat-line"></view>
+    <view class="stat-item" bindtap="goAccepted">
+      <text class="stat-value">{{profile ? profile.stats.accepted : 0}}</text>
+      <text class="stat-label">我接取的</text>
+    </view>
+    <view class="stat-line"></view>
+    <view class="stat-item">
+      <text class="stat-value">{{profile ? profile.stats.completed : 0}}</text>
+      <text class="stat-label">已完成</text>
+    </view>
+  </view>
+
+  <view class="section">
+    <view class="section-title">我的服务</view>
+    <view class="menu-card card">
+      <view
+        wx:for="{{menu}}"
+        wx:key="key"
+        class="menu-item"
+        data-key="{{item.key}}"
+        bindtap="openMenu"
+      >
+        <view class="menu-mark">{{item.mark}}</view>
+        <view class="grow">
+          <view class="menu-title">{{item.title}}</view>
+          <view class="menu-subtitle">{{item.subtitle}}</view>
+        </view>
+        <view wx:if="{{item.key === 'messages' && profile && profile.stats.unread}}" class="unread-dot">
+          {{profile.stats.unread}}
+        </view>
+        <text class="menu-arrow">›</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="safety-note">
+    <view class="safety-mark">✓</view>
+    <view>
+      <view class="safety-title">邻里安全提醒</view>
+      <view class="safety-text">贵重物品请当面核对，遇到纠纷及时保留凭证并发起投诉。</view>
+    </view>
+  </view>
+</view>

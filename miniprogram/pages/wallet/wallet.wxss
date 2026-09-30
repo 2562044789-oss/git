@@ -1,0 +1,234 @@
+.wallet-page {
+  padding-top: 18rpx;
+}
+
+.wallet-hero {
+  overflow: hidden;
+  padding: 38rpx 32rpx;
+  border-radius: 28rpx;
+  color: #ffffff;
+  background: #489f6c;
+  box-shadow: 0 16rpx 35rpx rgba(52, 126, 82, 0.18);
+}
+
+.wallet-caption {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 23rpx;
+}
+
+.balance {
+  margin-top: 8rpx;
+  font-size: 57rpx;
+  font-weight: 800;
+}
+
+.wallet-note {
+  margin-top: 20rpx;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 22rpx;
+}
+
+.record-list {
+  margin-top: 20rpx;
+  padding: 0 24rpx;
+}
+
+.record-item {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  min-height: 126rpx;
+  border-bottom: 1rpx solid #e7eee9;
+}
+
+.record-item:last-child {
+  border-bottom: 0;
+}
+
+.record-mark {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 20rpx;
+  color: #2f8055;
+  background: #e7f5ec;
+  font-size: 24rpx;
+  font-weight: 800;
+}
+
+.record-mark.expense {
+  color: #a75c2d;
+  background: #fff0e3;
+}
+
+.record-mark.refund {
+  color: #47788f;
+  background: #e8f2f7;
+}
+
+.record-title {
+  font-size: 25rpx;
+  font-weight: 600;
+}
+
+.record-time {
+  margin-top: 5rpx;
+  color: #919d96;
+  font-size: 20rpx;
+}
+
+.record-amount {
+  color: #34835a;
+  font-size: 29rpx;
+  font-weight: 750;
+}
+
+.record-amount.expense {
+  color: #ba6634;
+}
+
+.recharge-sheet {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 90;
+  padding: 28rpx 28rpx calc(30rpx + env(safe-area-inset-bottom));
+  border-radius: 30rpx 30rpx 0 0;
+  background: #ffffff;
+}
+
+.recharge-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 24rpx;
+}
+
+.recharge-title {
+  font-size: 34rpx;
+  font-weight: 800;
+}
+
+.recharge-subtitle {
+  margin-top: 6rpx;
+  color: #87968d;
+  font-size: 22rpx;
+}
+
+.recharge-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 58rpx;
+  height: 58rpx;
+  border-radius: 50%;
+  color: #6f7e75;
+  background: #f0f5f1;
+  font-size: 38rpx;
+}
+
+.quick-amount-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14rpx;
+}
+
+.quick-amount {
+  display: flex;
+  width: calc((100% - 28rpx) / 3);
+  min-height: 78rpx;
+  align-items: center;
+  justify-content: center;
+  border: 1rpx solid #dce8df;
+  border-radius: 16rpx;
+  color: #52655a;
+  background: #f9fbf9;
+  font-size: 28rpx;
+  font-weight: 650;
+}
+
+.quick-amount.active {
+  border-color: #4aa974;
+  color: #2f8055;
+  background: #e7f5ec;
+}
+
+.custom-amount {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  height: 88rpx;
+  margin-top: 18rpx;
+  padding: 0 20rpx;
+  border: 1rpx solid #dce8df;
+  border-radius: 16rpx;
+  background: #f9fbf9;
+  color: #d77f34;
+  font-size: 30rpx;
+  font-weight: 700;
+}
+
+.custom-amount input {
+  flex: 1;
+  color: #1d3025;
+  font-size: 28rpx;
+}
+
+.recharge-submit {
+  margin-top: 26rpx;
+}
+
+.recharge-card {
+  margin-top: 22rpx;
+  padding: 26rpx;
+}
+
+.recharge-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.recharge-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 58rpx;
+  height: 58rpx;
+  border-radius: 18rpx;
+  color: #ffffff;
+  background: #4aa974;
+  font-size: 25rpx;
+  font-weight: 800;
+}
+
+.wallet-mode-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8rpx;
+  margin-top: 22rpx;
+  padding: 6rpx;
+  border-radius: 16rpx;
+  background: #edf4ef;
+}
+
+.wallet-mode-option {
+  display: flex;
+  min-height: 62rpx;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12rpx;
+  color: #6c7d73;
+  font-size: 24rpx;
+  font-weight: 650;
+}
+
+.wallet-mode-option.active {
+  color: #2f8055;
+  background: #ffffff;
+  box-shadow: 0 6rpx 16rpx rgba(50, 87, 62, 0.08);
+}

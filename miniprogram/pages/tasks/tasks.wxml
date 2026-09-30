@@ -1,0 +1,109 @@
+<view class="page tasks-page">
+  <view class="page-head">
+    <view>
+      <view class="page-title">任务大厅</view>
+      <view class="page-subtitle">当前有 {{total}} 件邻里任务等待帮忙</view>
+    </view>
+    <button class="head-publish" bindtap="goPublish">＋ 发布</button>
+  </view>
+
+  <view class="search-bar">
+    <view class="search-icon"></view>
+    <input
+      class="search-input"
+      value="{{keyword}}"
+      placeholder="搜索快递、买菜、喂养..."
+      placeholder-class="input-placeholder"
+      bindinput="onKeywordInput"
+      bindconfirm="submitSearch"
+      confirm-type="search"
+    />
+    <text wx:if="{{keyword}}" class="clear-search" bindtap="clearSearch">×</text>
+  </view>
+
+  <view class="filter-summary" bindtap="toggleFilters">
+    <view class="filter-summary-main">
+      <text class="filter-summary-label">筛选</text>
+      <text class="filter-summary-value">{{activeCategoryName}}</text>
+      <text class="filter-summary-dot">·</text>
+      <text class="filter-summary-value">{{activeSortLabel}}</text>
+    </view>
+    <view class="filter-summary-toggle">{{filterOpen ? '收起' : '展开'}} <text class="filter-arrow">{{filterOpen ? '⌃' : '⌄'}}</text></view>
+  </view>
+
+  <view wx:if="{{filterOpen}}" class="filter-panel card">
+    <view class="filter-group-title">任务分类</view>
+    <view class="category-wrap">
+      <view class="filter-chip {{categoryId === 0 ? 'active' : ''}}" data-id="0" bindtap="selectCategory">全部</view>
+      <view
+        wx:for="{{categories}}"
+        wx:key="id"
+        class="filter-chip {{categoryId === item.id ? 'active' : ''}}"
+        data-id="{{item.id}}"
+        bindtap="selectCategory"
+      >
+        {{item.name}}
+      </view>
+    </view>
+    <view class="filter-divider"></view>
+    <view class="filter-group-title">排序方式</view>
+    <view class="sort-grid">
+      <view
+        wx:for="{{sorts}}"
+        wx:key="value"
+        class="sort-option {{sort === item.value ? 'active' : ''}}"
+        data-value="{{item.value}}"
+        bindtap="selectSort"
+      >
+        {{item.label}}
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{loading}}" class="loading-list">
+    <view wx:for="{{[1,2,3]}}" wx:key="*this" class="skeleton-card"></view>
+  </view>
+
+  <view wx:elif="{{tasks.length}}" class="task-list">
+    <view
+      wx:for="{{tasks}}"
+      wx:key="id"
+      class="task-card card"
+      data-id="{{item.id}}"
+      bindtap="goTask"
+    >
+      <view class="card-head">
+        <view class="tag">{{item.category_name}}</view>
+        <view class="money">{{item.reward}}</view>
+      </view>
+      <view class="task-title">{{item.title}}</view>
+      <view class="task-description">{{item.description}}</view>
+      <view wx:if="{{item.category_address_mode === 2}}" class="route-row service-route">
+        <view class="route-dot start"></view>
+        <text class="route-text">服务地址：{{item.pickup_address}}</text>
+      </view>
+      <view wx:else class="route-row">
+        <view class="route-dot start"></view>
+        <text class="route-text">{{item.pickup_address}}</text>
+        <view class="route-arrow">→</view>
+        <view class="route-dot end"></view>
+        <text class="route-text">{{item.delivery_address}}</text>
+      </view>
+      <view class="card-foot">
+        <view class="row poster">
+          <view class="mini-avatar">{{item.publisherInitials}}</view>
+          <text>{{item.publisher_name}}</text>
+          <text class="poster-dot">·</text>
+          <text>{{item.timeText}} 前完成</text>
+        </view>
+        <view class="accept-hint">查看详情 ›</view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:else class="empty">
+    <view class="empty-symbol">○</view>
+    <view class="empty-title">暂时没有匹配的任务</view>
+    <view>换个分类或关键词再找找</view>
+  </view>
+</view>

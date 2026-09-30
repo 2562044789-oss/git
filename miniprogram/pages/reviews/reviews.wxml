@@ -1,0 +1,84 @@
+<view class="page reviews-page page-no-tab">
+  <view wx:if="{{formOpen}}">
+    <view class="page-title">评价本次服务</view>
+    <view class="page-subtitle">你的评价会帮助邻里建立更可靠的信用</view>
+
+    <view wx:if="{{order}}" class="review-order card">
+      <view class="review-order-title">{{order.title}}</view>
+      <view class="muted">{{order.order_no}}</view>
+    </view>
+
+    <view class="review-form card">
+      <view class="rating-title">本次服务体验如何？</view>
+      <view class="rating-row">
+        <view
+          wx:for="{{[1,2,3,4,5]}}"
+          wx:key="*this"
+          class="star {{rating >= item ? 'active' : ''}}"
+          data-rating="{{item}}"
+          bindtap="selectRating"
+        >
+          ★
+        </view>
+      </view>
+      <view class="rating-text">
+        {{rating === 5 ? '非常满意' : rating === 4 ? '满意' : rating === 3 ? '一般' : rating === 2 ? '不满意' : '非常不满意'}}
+      </view>
+
+      <view class="tag-title">选择印象标签</view>
+      <view class="review-tags">
+        <view
+          wx:for="{{tags}}"
+          wx:key="name"
+          class="review-tag {{item.active ? 'active' : ''}}"
+          data-tag="{{item.name}}"
+          bindtap="toggleTag"
+        >
+          {{item.name}}
+        </view>
+      </view>
+
+      <view class="tag-title">补充评价</view>
+      <textarea
+        class="textarea"
+        maxlength="500"
+        value="{{content}}"
+        placeholder="说说这次邻里互助的感受"
+        placeholder-class="input-placeholder"
+        bindinput="updateContent"
+      />
+    </view>
+
+    <button class="primary-button submit-button" loading="{{submitting}}" bindtap="submit">提交评价</button>
+  </view>
+
+  <view wx:else>
+    <view class="page-title">我的评价</view>
+    <view class="page-subtitle">邻里对你在平台提供服务的真实反馈</view>
+    <view wx:if="{{reviews.length}}" class="review-list">
+      <view
+        wx:for="{{reviews}}"
+        wx:key="id"
+        class="received-card card"
+        data-id="{{item.order_id}}"
+        bindtap="goOrder"
+      >
+        <view class="row-between">
+          <view class="reviewer">{{item.reviewer_name}}</view>
+          <view class="stars-small">
+            <text wx:for="{{[1,2,3,4,5]}}" wx:key="*this" class="{{item.rating >= item ? 'active' : ''}}">★</text>
+          </view>
+        </view>
+        <view class="review-task">{{item.task_title}}</view>
+        <view class="review-content">{{item.content || '对方没有填写文字评价'}}</view>
+        <view class="review-tags-text">{{item.tags}}</view>
+        <view class="review-time">{{item.created_at}}</view>
+      </view>
+    </view>
+    <view wx:else class="empty card">
+      <view class="empty-symbol">评</view>
+      <view class="empty-title">还没有收到评价</view>
+      <view>完成订单后双方可以互相评价</view>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#e8f5ec">
+  <title>阳光社区邻里快办</title>
+  <link rel="stylesheet" href="/preview/styles.css">
+</head>
+<body>
+  <div class="preview-shell">
+    <main class="phone-app" id="app">
+      <div class="loading-screen">
+        <div class="brand-mark">阳</div>
+        <div class="loading-text">正在进入阳光社区</div>
+      </div>
+    </main>
+    <nav class="tab-bar" id="tabBar" hidden>
+      <button data-view="home"><span data-icon="home"></span><small>首页</small></button>
+      <button data-view="tasks"><span data-icon="list"></span><small>任务</small></button>
+      <button class="publish-tab" data-view="publish"><span data-icon="plus"></span><small>发布</small></button>
+      <button data-view="orders"><span data-icon="clipboard"></span><small>订单</small></button>
+      <button data-view="profile"><span data-icon="user"></span><small>我的</small></button>
+    </nav>
+  </div>
+  <div class="toast" id="toast" hidden></div>
+  <div class="modal-backdrop" id="modalBackdrop" hidden>
+    <div class="modal" id="modal"></div>
+  </div>
+  <script src="/preview/app.js"></script>
+</body>
+</html>

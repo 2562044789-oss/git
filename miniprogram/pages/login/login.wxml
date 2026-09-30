@@ -1,0 +1,37 @@
+<view class="login-page">
+  <view class="brand-area">
+    <view class="brand-mark">阳</view>
+    <view class="brand-name">阳光社区邻里快办</view>
+    <view class="brand-copy">邻里搭把手，生活更轻松</view>
+  </view>
+
+  <view class="login-card">
+    <view class="welcome-title">欢迎使用</view>
+    <view class="welcome-subtitle">微信首次登录将自动创建社区账号</view>
+
+    <view class="field">
+      <text class="field-label">昵称（选填）</text>
+      <input
+        class="nickname-input"
+        type="nickname"
+        value="{{nickname}}"
+        maxlength="20"
+        placeholder="未填写时自动生成"
+        placeholder-class="input-placeholder"
+        bindinput="updateNickname"
+      />
+    </view>
+
+    <button class="wechat-button" loading="{{loading}}" disabled="{{loading}}" bindtap="authorizeLogin">
+      <view class="wechat-symbol">微</view>
+      <text>微信授权登录</text>
+    </button>
+
+    <view class="agreement" bindtap="toggleAgreement">
+      <view class="agreement-check {{agreed ? 'checked' : ''}}">{{agreed ? '✓' : ''}}</view>
+      <text>我已阅读并同意用户协议和隐私政策</text>
+    </view>
+  </view>
+
+  <view class="login-footer">阳光社区 · 邻里互助服务平台</view>
+</view>

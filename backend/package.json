@@ -1,0 +1,16 @@
+{
+  "name": "sunshine-community-express-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "阳光社区邻里快办小程序后端服务",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node --no-warnings src/server.js",
+    "dev": "node --no-warnings --watch src/server.js",
+    "check": "node --check src/server.js && node --check src/db.js && node --check src/auth.js && node --check src/wechat.js",
+    "test": "node --test test/wechat.test.js"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

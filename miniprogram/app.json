@@ -1,0 +1,54 @@
+{
+  "pages": [
+    "pages/login/login",
+    "pages/home/home",
+    "pages/tasks/tasks",
+    "pages/publish/publish",
+    "pages/orders/orders",
+    "pages/profile/profile",
+    "pages/task-detail/task-detail",
+    "pages/order-detail/order-detail",
+    "pages/messages/messages",
+    "pages/wallet/wallet",
+    "pages/addresses/addresses",
+    "pages/complaints/complaints",
+    "pages/reviews/reviews"
+  ],
+  "window": {
+    "navigationBarTitleText": "阳光社区邻里快办",
+    "navigationBarBackgroundColor": "#F2F9F4",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#F3F8F4",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "custom": true,
+    "color": "#718078",
+    "selectedColor": "#399A63",
+    "backgroundColor": "#FFFFFF",
+    "list": [
+      {
+        "pagePath": "pages/home/home",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/tasks/tasks",
+        "text": "任务"
+      },
+      {
+        "pagePath": "pages/publish/publish",
+        "text": "发布"
+      },
+      {
+        "pagePath": "pages/orders/orders",
+        "text": "订单"
+      },
+      {
+        "pagePath": "pages/profile/profile",
+        "text": "我的"
+      }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

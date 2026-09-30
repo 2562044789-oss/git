@@ -1,0 +1,90 @@
+<view class="page address-page page-no-tab">
+  <view class="page-head">
+    <view>
+      <view class="page-title">常用地址</view>
+      <view class="page-subtitle">发布任务时可快速带入地址信息</view>
+    </view>
+    <button class="add-button" bindtap="openCreate">＋ 新增</button>
+  </view>
+
+  <view wx:if="{{addresses.length}}" class="address-list">
+    <view wx:for="{{addresses}}" wx:key="id" class="address-card card">
+      <view class="address-head">
+        <view>
+          <view class="contact">{{item.contact_name}} <text>{{item.phone}}</text></view>
+          <view class="address-type-tag">{{item.typeText}}</view>
+        </view>
+        <view wx:if="{{item.is_default}}" class="default-tag">默认</view>
+      </view>
+      <view class="address-text">
+        {{item.community}} {{item.building}} {{item.room}} {{item.detail}}
+      </view>
+      <view class="address-actions">
+        <button data-id="{{item.id}}" bindtap="openEdit">编辑</button>
+        <button class="delete" data-id="{{item.id}}" bindtap="deleteAddress">删除</button>
+      </view>
+    </view>
+  </view>
+
+  <view wx:else class="empty card">
+    <view class="empty-symbol">址</view>
+    <view class="empty-title">还没有常用地址</view>
+    <view>新增后发布任务会更快</view>
+  </view>
+
+  <view wx:if="{{editorOpen}}" class="editor-mask" bindtap="closeEditor"></view>
+  <view wx:if="{{editorOpen}}" class="editor-sheet safe-bottom">
+    <view class="sheet-head">
+      <view class="sheet-title">{{form.id ? '编辑地址' : '新增地址'}}</view>
+      <view class="sheet-close" bindtap="closeEditor">×</view>
+    </view>
+    <view class="field">
+      <text class="field-label">地址类型</text>
+      <view class="address-type-row">
+        <view
+          class="address-type-option {{form.addressType === 1 ? 'active' : ''}}"
+          data-type="1"
+          bindtap="selectAddressType"
+        >取件 / 服务地址</view>
+        <view
+          class="address-type-option {{form.addressType === 2 ? 'active' : ''}}"
+          data-type="2"
+          bindtap="selectAddressType"
+        >送达地址</view>
+      </view>
+    </view>
+    <view class="two-fields">
+      <view class="field">
+        <text class="field-label">联系人</text>
+        <input class="input" value="{{form.contactName}}" data-field="contactName" bindinput="updateField" />
+      </view>
+      <view class="field">
+        <text class="field-label">联系电话</text>
+        <input class="input" value="{{form.phone}}" data-field="phone" bindinput="updateField" />
+      </view>
+    </view>
+    <view class="field">
+      <text class="field-label">社区</text>
+      <input class="input" value="{{form.community}}" data-field="community" bindinput="updateField" />
+    </view>
+    <view class="two-fields">
+      <view class="field">
+        <text class="field-label">楼栋</text>
+        <input class="input" value="{{form.building}}" placeholder="12栋" data-field="building" bindinput="updateField" />
+      </view>
+      <view class="field">
+        <text class="field-label">门牌号</text>
+        <input class="input" value="{{form.room}}" placeholder="2单元602" data-field="room" bindinput="updateField" />
+      </view>
+    </view>
+    <view class="field">
+      <text class="field-label">补充说明</text>
+      <input class="input" value="{{form.detail}}" placeholder="门禁、路线等说明" data-field="detail" bindinput="updateField" />
+    </view>
+    <view class="default-row" bindtap="toggleDefault">
+      <view class="default-check {{form.isDefault ? 'checked' : ''}}">{{form.isDefault ? '✓' : ''}}</view>
+      <text>设为默认地址</text>
+    </view>
+    <button class="primary-button save-button" loading="{{saving}}" bindtap="saveAddress">保存地址</button>
+  </view>
+</view>

@@ -1,0 +1,98 @@
+<view wx:if="{{task}}" class="detail-page">
+  <view class="detail-hero">
+    <view class="row-between">
+      <view class="tag">{{task.category_name}}</view>
+      <view class="distance">{{task.distance_km}} km</view>
+    </view>
+    <view class="detail-title">{{task.title}}</view>
+    <view class="reward-row">
+      <view>
+        <view class="reward-label">任务报酬</view>
+        <view class="detail-money">¥{{task.reward}}</view>
+      </view>
+      <view class="status {{task.statusClass}}">{{task.statusText}}</view>
+    </view>
+  </view>
+
+  <view class="detail-body">
+    <view class="info-card card">
+      <view class="info-title">任务说明</view>
+      <view class="description">{{task.description || '发布者未补充任务说明。'}}</view>
+      <view wx:if="{{task.images.length}}" class="task-images">
+        <image wx:for="{{task.images}}" wx:key="*this" src="{{item}}" mode="aspectFill"></image>
+      </view>
+    </view>
+
+    <view class="info-card card">
+      <view class="info-title">服务路线</view>
+      <view class="address-timeline">
+        <view class="timeline-item">
+          <view class="timeline-point start"></view>
+          <view wx:if="{{task.category_address_mode !== 2}}" class="timeline-line"></view>
+          <view>
+            <view class="timeline-label">{{task.category_address_mode === 2 ? '服务地址' : '取件 / 服务地址'}}</view>
+            <view class="timeline-address">{{task.pickup_address}}</view>
+          </view>
+        </view>
+        <view wx:if="{{task.category_address_mode !== 2}}" class="timeline-item">
+          <view class="timeline-point end"></view>
+          <view>
+            <view class="timeline-label">送达地址</view>
+            <view class="timeline-address">{{task.delivery_address}}</view>
+          </view>
+        </view>
+      </view>
+      <view class="divider"></view>
+      <view class="detail-row">
+        <text>期望完成</text>
+        <text>{{task.timeText}}</text>
+      </view>
+      <view class="detail-row">
+        <text>发布邻居</text>
+        <view class="row poster-line">
+          <view class="mini-avatar">{{task.publisherInitials}}</view>
+          <text>{{task.publisher_name}}</text>
+          <text class="credit">信用 {{task.publisher_credit}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="security-card">
+      <view class="security-icon">✓</view>
+      <view>
+        <view class="security-title">费用托管与隐私保护</view>
+        <view class="security-text">报酬由平台托管，手机号和详细地址仅对订单参与双方展示。</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="bottom-action safe-bottom">
+    <button class="contact-button {{task.can_contact ? '' : 'disabled'}}" bindtap="contactPublisher">
+      {{task.can_contact ? '查看联系方式' : '接单后可见'}}
+    </button>
+    <button
+      wx:if="{{task.can_accept}}"
+      class="primary-button accept-button"
+      loading="{{accepting}}"
+      disabled="{{accepting}}"
+      bindtap="acceptTask"
+    >
+      立即接单
+    </button>
+    <button
+      wx:elif="{{isPublisher && (task.status === 0 || task.status === 1)}}"
+      class="danger-button accept-button"
+      bindtap="cancelTask"
+    >
+      取消任务
+    </button>
+    <button wx:else class="primary-button accept-button" disabled>
+      {{isPublisher ? '我发布的任务' : task.statusText}}
+    </button>
+  </view>
+</view>
+
+<view wx:else class="page detail-loading">
+  <view class="loading-block"></view>
+  <view class="loading-block short"></view>
+</view>

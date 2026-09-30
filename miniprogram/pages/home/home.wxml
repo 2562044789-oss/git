@@ -1,0 +1,109 @@
+<view class="page home-page">
+  <view class="top-row">
+    <view>
+      <view class="location"><text class="location-dot"></text>阳光社区</view>
+      <view class="greeting">{{user ? user.nickname : '邻里'}}，今天也来搭把手</view>
+    </view>
+    <button class="notice-button" bindtap="goMessages">
+      <view class="bell-shape"></view>
+      <view wx:if="{{unread}}" class="notice-badge">{{unread > 9 ? '9+' : unread}}</view>
+    </button>
+  </view>
+
+  <view class="hero-band">
+    <view class="hero-content">
+      <view class="hero-kicker">SUNSHINE NEIGHBORHOOD</view>
+      <view class="hero-title">顺路帮个忙，<br />让邻里更近一步</view>
+      <view class="hero-copy">发布一件小事，等待邻里接单，费用托管更安心。</view>
+      <button class="hero-action" bindtap="goPublish">
+        <text>发布跑腿</text>
+        <text class="arrow">›</text>
+      </button>
+    </view>
+    <view class="hero-illustration" aria-hidden="true">
+      <view class="sun-disc"></view>
+      <view class="building building-left">
+        <view class="window-row"><text></text><text></text></view>
+        <view class="window-row"><text></text><text></text></view>
+      </view>
+      <view class="building building-right">
+        <view class="window-row"><text></text><text></text><text></text></view>
+        <view class="window-row"><text></text><text></text><text></text></view>
+      </view>
+      <view class="tree tree-one"></view>
+      <view class="tree tree-two"></view>
+      <view class="path"></view>
+    </view>
+  </view>
+
+  <view wx:if="{{announcements.length}}" class="announcement-row">
+    <view class="announcement-label">社区公告</view>
+    <view class="grow announcement-copy">{{announcements[0].title}}</view>
+    <text class="muted">›</text>
+  </view>
+
+  <view class="section">
+    <view class="section-head">
+      <view class="section-title">快捷服务</view>
+      <view class="section-link" bindtap="goCategories">全部服务</view>
+    </view>
+    <view class="category-grid">
+      <view
+        wx:for="{{categories}}"
+        wx:key="id"
+        class="category-item"
+        data-id="{{item.id}}"
+        bindtap="goCategory"
+      >
+        <view class="category-icon" style="background: {{item.color}}18; color: {{item.color}};">
+          {{item.shortText}}
+        </view>
+        <text>{{item.name}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="section">
+    <view class="section-head">
+      <view>
+        <view class="section-title">附近急单</view>
+        <view class="page-subtitle">按发布时间为你推荐</view>
+      </view>
+      <view class="section-link" bindtap="goCategories">查看更多</view>
+    </view>
+    <view class="task-list">
+      <view
+        wx:for="{{tasks}}"
+        wx:key="id"
+        class="task-card card"
+        data-id="{{item.id}}"
+        bindtap="goTask"
+      >
+        <view class="task-accent" style="background: {{item.category_color || '#4AA974'}};"></view>
+        <view class="row-between">
+          <view class="tag">{{item.category_name}}</view>
+          <view class="distance">{{item.distance_km}} km</view>
+        </view>
+        <view class="task-title">{{item.title}}</view>
+        <view class="task-description">{{item.description}}</view>
+        <view class="task-route">
+          <view class="route-dot start"></view>
+          <view class="route-text">{{item.pickup_address}}</view>
+          <view class="route-line"></view>
+          <view class="route-dot end"></view>
+          <view class="route-text">{{item.delivery_address}}</view>
+        </view>
+        <view class="divider"></view>
+        <view class="row-between">
+          <view class="row task-meta">
+            <view class="mini-avatar">{{item.publisherInitials}}</view>
+            <text>{{item.publisher_name}}</text>
+            <text class="dot-separator">·</text>
+            <text>{{item.timeText}} 前完成</text>
+          </view>
+          <view class="money">{{item.reward}}</view>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

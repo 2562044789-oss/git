@@ -1,0 +1,63 @@
+<view class="page wallet-page page-no-tab">
+  <view class="wallet-hero">
+    <view class="wallet-caption">钱包可用余额</view>
+    <view class="balance">¥ {{balanceText}}</view>
+    <view class="wallet-note">所有劳务报酬均通过平台托管结算</view>
+  </view>
+
+  <view class="recharge-card card">
+    <view class="recharge-card-head">
+      <view>
+        <view class="recharge-title">{{walletMode === 'recharge' ? '微信充值' : '余额提现'}}</view>
+        <view class="recharge-subtitle">{{walletMode === 'recharge' ? '充值后可用于发布任务' : '提现金额不能超过可用余额'}}</view>
+      </view>
+      <view class="recharge-mark">微</view>
+    </view>
+    <view class="wallet-mode-switch">
+      <view class="wallet-mode-option {{walletMode === 'recharge' ? 'active' : ''}}" data-mode="recharge" bindtap="switchWalletMode">充值</view>
+      <view class="wallet-mode-option {{walletMode === 'withdraw' ? 'active' : ''}}" data-mode="withdraw" bindtap="switchWalletMode">提现</view>
+    </view>
+    <view class="quick-amount-grid">
+      <view
+        wx:for="{{quickAmounts}}"
+        wx:key="*this"
+        class="quick-amount {{rechargeAmount == item ? 'active' : ''}}"
+        data-amount="{{item}}"
+        bindtap="selectRechargeAmount"
+      >¥{{item}}</view>
+    </view>
+    <view class="custom-amount">
+      <text>¥</text>
+      <input
+        type="digit"
+        value="{{rechargeAmount}}"
+        placeholder="输入其他金额"
+        placeholder-class="input-placeholder"
+        bindinput="updateRechargeAmount"
+      />
+    </view>
+    <button class="primary-button recharge-submit" loading="{{processing}}" disabled="{{processing}}" bindtap="submitWalletAction">
+      {{walletMode === 'recharge' ? '确认微信充值' : '确认余额提现'}}
+    </button>
+  </view>
+
+  <view class="section">
+    <view class="section-head">
+      <view class="section-title">收支明细</view>
+      <view class="muted">共 {{records.length}} 笔</view>
+    </view>
+    <view wx:if="{{records.length}}" class="record-list card">
+      <view wx:for="{{records}}" wx:key="id" class="record-item">
+        <view class="record-mark {{item.className}}">{{item.typeText[0]}}</view>
+        <view class="grow">
+          <view class="record-title">{{item.remark}}</view>
+          <view class="record-time">{{item.created_at}}</view>
+        </view>
+        <view class="record-amount {{item.className}}">
+          {{item.sign}}¥{{item.amount < 0 ? -item.amount : item.amount}}
+        </view>
+      </view>
+    </view>
+    <view wx:else class="empty card">暂无钱包流水</view>
+  </view>
+</view>

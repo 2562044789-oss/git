@@ -1,0 +1,104 @@
+<view class="page orders-page">
+  <view class="page-title">我的订单</view>
+  <view class="page-subtitle">跟进服务进度，及时确认与评价</view>
+
+  <view class="role-switch">
+    <view
+      class="role-tab {{role === 'published' ? 'active' : ''}}"
+      data-role="published"
+      bindtap="switchRole"
+    >
+      我发布的
+    </view>
+    <view
+      class="role-tab {{role === 'accepted' ? 'active' : ''}}"
+      data-role="accepted"
+      bindtap="switchRole"
+    >
+      我接取的
+    </view>
+  </view>
+
+  <view class="order-filter-summary" bindtap="toggleFilter">
+    <view class="order-filter-main">
+      <text class="order-filter-label">状态</text>
+      <text class="order-filter-value">{{activeStatusLabel}}</text>
+    </view>
+    <view class="order-filter-toggle">{{filterOpen ? '收起' : '展开'}} {{filterOpen ? '⌃' : '⌄'}}</view>
+  </view>
+
+  <view wx:if="{{filterOpen}}" class="order-filter-panel card">
+    <view class="order-status-grid">
+      <view
+        wx:for="{{filters}}"
+        wx:key="value"
+        class="order-status-option {{status === item.value ? 'active' : ''}}"
+        data-value="{{item.value}}"
+        bindtap="selectStatus"
+      >
+        {{item.label}}
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{loading}}" class="order-list">
+    <view wx:for="{{[1,2,3]}}" wx:key="*this" class="order-skeleton"></view>
+  </view>
+
+  <view wx:elif="{{orders.length}}" class="order-list">
+    <view
+      wx:for="{{orders}}"
+      wx:key="id"
+      class="order-card card"
+      data-id="{{item.id}}"
+      bindtap="goOrder"
+    >
+      <view class="order-head">
+        <view class="row order-type">
+          <view class="type-mark">{{item.category_icon ? item.category_icon[0] : '邻'}}</view>
+          <view>
+            <view class="order-no">{{item.order_no}}</view>
+            <view class="muted">{{item.timeText}}</view>
+          </view>
+        </view>
+        <view class="status {{item.statusClass}}">{{item.statusText}}</view>
+      </view>
+      <view class="order-title">{{item.title}}</view>
+      <view wx:if="{{item.category_address_mode === 2}}" class="order-route single-route">
+        <view class="route-line"><text class="point green"></text></view>
+        <view class="route-addresses single-address">
+          <view>服务地址：{{item.pickup_address}}</view>
+        </view>
+      </view>
+      <view wx:else class="order-route">
+        <view class="route-line"><text class="point green"></text><text class="line"></text><text class="point orange"></text></view>
+        <view class="route-addresses">
+          <view>{{item.pickup_address}}</view>
+          <view>{{item.delivery_address}}</view>
+        </view>
+      </view>
+      <view class="order-foot">
+        <view class="person">
+          <text class="muted">{{role === 'published' ? '接单邻居' : '发布邻居'}}</text>
+          <text>{{role === 'published' ? item.acceptor_name : item.publisher_name}}</text>
+        </view>
+        <view class="order-price">
+          <text class="muted">订单金额</text>
+          <text class="money">{{item.amount}}</text>
+        </view>
+      </view>
+      <view class="order-action">
+        <text>{{item.status === 3 ? (item.reviewed ? '查看订单' : '去评价') : '查看进度'}}</text>
+        <text>›</text>
+      </view>
+    </view>
+  </view>
+
+  <view wx:else class="empty card">
+    <view class="empty-symbol">□</view>
+    <view class="empty-title">还没有{{role === 'published' ? '发布' : '接取'}}的订单</view>
+    <button wx:if="{{role === 'published'}}" class="secondary-button empty-button" bindtap="goPublish">
+      去发布任务
+    </button>
+  </view>
+</view>

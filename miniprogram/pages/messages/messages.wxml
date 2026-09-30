@@ -1,0 +1,57 @@
+<view class="page messages-page page-no-tab">
+  <view class="message-head">
+    <view>
+      <view class="page-title">消息中心</view>
+      <view class="page-subtitle">及时了解任务和订单动态</view>
+    </view>
+    <button class="read-all" bindtap="readAll">全部已读</button>
+  </view>
+
+  <button class="message-filter-summary" hover-class="none" bindtap="toggleFilter">
+    <view class="message-filter-main">
+      <text class="message-filter-label">类型</text>
+      <text class="message-filter-value">{{activeTypeLabel}}</text>
+    </view>
+    <view class="message-filter-toggle">{{filterOpen ? '收起' : '展开'}} {{filterOpen ? '⌃' : '⌄'}}</view>
+  </button>
+
+  <view wx:if="{{filterOpen}}" class="message-filter-panel card">
+    <view class="message-type-grid">
+      <view
+        wx:for="{{filters}}"
+        wx:key="value"
+        class="message-type-option {{type === item.value ? 'active' : ''}}"
+        data-value="{{item.value}}"
+        bindtap="selectType"
+      >
+        {{item.label}}
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{messages.length}}" class="message-list">
+    <view
+      wx:for="{{messages}}"
+      wx:key="id"
+      class="message-card card {{item.is_read ? 'read' : ''}}"
+      data-id="{{item.id}}"
+      bindtap="readMessage"
+    >
+      <view class="message-mark type-{{item.type}}">{{item.typeText[0]}}</view>
+      <view class="grow">
+        <view class="message-title-row">
+          <view class="message-title">{{item.title}}</view>
+          <view wx:if="{{!item.is_read}}" class="unread-dot"></view>
+        </view>
+        <view class="message-content">{{item.content}}</view>
+        <view class="message-time">{{item.created_at}}</view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:else class="empty card">
+    <view class="empty-symbol">信</view>
+    <view class="empty-title">暂时没有消息</view>
+    <view>订单状态变化时会在这里提醒你</view>
+  </view>
+</view>

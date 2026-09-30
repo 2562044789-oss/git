@@ -1,0 +1,267 @@
+.orders-page {
+  padding-top: 18rpx;
+}
+
+.role-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 28rpx;
+  padding: 7rpx;
+  border-radius: 18rpx;
+  background: #e7f0ea;
+}
+
+.role-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 70rpx;
+  border-radius: 14rpx;
+  color: #697a70;
+  font-size: 25rpx;
+}
+
+.role-tab.active {
+  color: #2f8055;
+  background: #ffffff;
+  box-shadow: 0 7rpx 18rpx rgba(52, 91, 65, 0.08);
+  font-weight: 700;
+}
+
+.status-scroll {
+  margin-top: 24rpx;
+}
+
+.order-filter-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 78rpx;
+  margin-top: 20rpx;
+  padding: 0 22rpx;
+  border: 1rpx solid #dfeae2;
+  border-radius: 18rpx;
+  background: #ffffff;
+}
+
+.order-filter-main {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.order-filter-label {
+  padding: 5rpx 12rpx;
+  border-radius: 9rpx;
+  color: #2f8055;
+  background: #e7f5ec;
+  font-size: 21rpx;
+  font-weight: 700;
+}
+
+.order-filter-value {
+  color: #50645a;
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+.order-filter-toggle {
+  color: #31875a;
+  font-size: 23rpx;
+  font-weight: 600;
+}
+
+.order-filter-panel {
+  margin-top: 16rpx;
+  padding: 22rpx;
+}
+
+.order-status-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.order-status-option {
+  display: flex;
+  width: calc((100% - 24rpx) / 3);
+  min-height: 66rpx;
+  align-items: center;
+  justify-content: center;
+  border: 1rpx solid #e0e9e3;
+  border-radius: 14rpx;
+  color: #617268;
+  background: #f9fbf9;
+  font-size: 23rpx;
+}
+
+.order-status-option.active {
+  border-color: #4aa974;
+  color: #2f8055;
+  background: #e7f5ec;
+  font-weight: 700;
+}
+
+.order-list {
+  display: flex;
+  flex-direction: column;
+  gap: 22rpx;
+  margin-top: 24rpx;
+}
+
+.order-card {
+  overflow: hidden;
+  padding: 25rpx 25rpx 0;
+}
+
+.order-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.order-type {
+  gap: 13rpx;
+}
+
+.type-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 60rpx;
+  height: 60rpx;
+  border-radius: 18rpx;
+  color: #36825a;
+  background: #e7f5ec;
+  font-size: 25rpx;
+  font-weight: 800;
+}
+
+.order-no {
+  color: #65766c;
+  font-size: 22rpx;
+}
+
+.order-title {
+  margin-top: 22rpx;
+  font-size: 31rpx;
+  font-weight: 700;
+}
+
+.order-route {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 20rpx;
+  padding: 18rpx;
+  border-radius: 16rpx;
+  background: #f7faf7;
+}
+
+.route-line {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 9rpx;
+}
+
+.point {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+}
+
+.point.green {
+  background: #4aa974;
+}
+
+.point.orange {
+  background: #d8904d;
+}
+
+.line {
+  width: 2rpx;
+  height: 42rpx;
+  background: #cad8ce;
+}
+
+.route-addresses {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 0;
+  height: 66rpx;
+  color: #58695f;
+  font-size: 23rpx;
+}
+
+.route-addresses view {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.order-foot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 22rpx 0;
+  border-bottom: 1rpx solid #e8efea;
+}
+
+.person,
+.order-price {
+  display: flex;
+  flex-direction: column;
+  gap: 3rpx;
+  font-size: 25rpx;
+  font-weight: 600;
+}
+
+.order-price {
+  align-items: flex-end;
+}
+
+.order-action {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10rpx;
+  height: 78rpx;
+  color: #31875a;
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+.order-skeleton {
+  height: 350rpx;
+  border-radius: 24rpx;
+  background: #e9f1eb;
+}
+
+.empty {
+  margin-top: 30rpx;
+  padding-bottom: 60rpx;
+}
+
+.empty-symbol {
+  margin-bottom: 12rpx;
+  color: #a8c9b5;
+  font-size: 86rpx;
+}
+
+.empty-button {
+  width: 260rpx;
+  height: 76rpx;
+  margin: 26rpx auto 0;
+}
+
+.single-route .route-line {
+  justify-content: center;
+}
+
+.single-address {
+  justify-content: center;
+  height: auto;
+}
