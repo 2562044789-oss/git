@@ -68,8 +68,12 @@ Page({
   async loadProfile() {
     this.setData({ loading: true });
     try {
-      const info = await app.request({ url: "/api/acceptor/profile" });
-      const user = app.globalData.user || {};
+      // 余额可能被钱包页改动过，这里重新拉一次资料，避免展示过期的可用余额
+      const [info, user] = await Promise.all([
+        app.request({ url: "/api/acceptor/profile" }),
+        app.request({ url: "/api/user/profile" }),
+      ]);
+      app.globalData.user = user;
       const status = Number(info.status || 0);
       const profile = info.profile || null;
       this.setData({
