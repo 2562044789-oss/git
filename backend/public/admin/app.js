@@ -497,6 +497,10 @@ function findAcceptor(id) {
   return (state.data.acceptors || []).find((item) => Number(item.id) === Number(id));
 }
 
+function findAnnouncement(id) {
+  return (state.data.announcements || []).find((item) => Number(item.id) === Number(id));
+}
+
 async function renderAcceptors(content) {
   const status = state.data.acceptorStatus ?? "";
   const keyword = state.data.acceptorKeyword || "";
@@ -673,23 +677,30 @@ async function renderAnnouncements(content) {
   state.data.announcements = announcements;
   content.innerHTML = `
     <div class="page-head">
-      <div><h2>公告管理</h2><p>发布社区公告，首页展示最新内容</p></div>
+      <div><h2>公告管理</h2><p>发布社区公告，首页展示最新内容；发错了可以下架或删除</p></div>
       <button class="primary-button" data-new-announcement>发布公告</button>
     </div>
     <div class="announcement-list">
       ${announcements
-        .map(
-          (announcement) => `
+        .map((announcement) => {
+          // 已下架的公告不再进前台，但后台要留着，方便改完重新发布。
+          const published = Number(announcement.status) === 1;
+          return `
             <article class="announcement-card">
               <div class="announcement-card-head">
                 <div class="announcement-title">${escapeHtml(announcement.title)}</div>
-                <span class="status green">已发布</span>
+                <span class="status ${published ? "green" : "gray"}">${published ? "已发布" : "已下架"}</span>
               </div>
               <div class="announcement-content">${escapeHtml(announcement.content)}</div>
               <div class="topbar-meta" style="margin-top:12px">${escapeHtml(announcement.created_at)}</div>
+              <div class="card-actions">
+                <button class="table-action" data-edit-announcement="${announcement.id}">编辑</button>
+                <button class="table-action ${published ? "danger" : ""}" data-announcement-status="${announcement.id}" data-status="${announcement.status}">${published ? "下架" : "重新发布"}</button>
+                <button class="table-action danger" data-delete-announcement="${announcement.id}">删除</button>
+              </div>
             </article>
-          `,
-        )
+          `;
+        })
         .join("") || '<div class="empty-state">暂无公告</div>'}
     </div>
   `;
@@ -715,6 +726,9 @@ const LOG_ACTION_TEXT = {
   pay_acceptor_deposit: "缴纳接单员保证金",
   quit_acceptor: "退出接单员",
   view_id_card: "查看完整身份证号",
+  publish_announcement: "发布公告",
+  update_announcement: "修改/上下架公告",
+  delete_announcement: "删除公告",
 };
 
 async function renderLogs(content) {
@@ -819,15 +833,17 @@ function openComplaintEditor(complaint) {
   `);
 }
 
-function openAnnouncementEditor() {
+// 传 announcement 是"编辑已有公告"，不传是"发布新公告"。
+// 保存按钮上带 id，用来区分走 PUT 还是 POST（跟分类编辑同一套路）。
+function openAnnouncementEditor(announcement = null) {
   openModal(`
-    <h2 class="modal-title">发布社区公告</h2>
-    <p class="modal-note">最新公告会展示在小程序首页</p>
-    <div class="field"><label>公告标题</label><input class="input" id="announcementTitle"></div>
-    <div class="field"><label>公告内容</label><textarea class="textarea" id="announcementContent" maxlength="500"></textarea></div>
+    <h2 class="modal-title">${announcement ? "编辑社区公告" : "发布社区公告"}</h2>
+    <p class="modal-note">${announcement ? "保存后前台立即生效；若已下架，需重新发布才会展示" : "最新公告会展示在小程序首页"}</p>
+    <div class="field"><label>公告标题</label><input class="input" id="announcementTitle" value="${escapeHtml(announcement?.title || "")}"></div>
+    <div class="field"><label>公告内容</label><textarea class="textarea" id="announcementContent" maxlength="500">${escapeHtml(announcement?.content || "")}</textarea></div>
     <div class="modal-actions">
       <button class="ghost-button" data-modal-close>取消</button>
-      <button class="primary-button" data-save-announcement>发布</button>
+      <button class="primary-button" data-save-announcement="${announcement?.id || ""}">${announcement ? "保存修改" : "发布"}</button>
     </div>
   `);
 }
@@ -1051,18 +1067,37 @@ app.addEventListener("click", async (event) => {
     return;
   }
 
-  const saveAnnouncement = event.target.closest("[data-save-announcement]");
-  if (saveAnnouncement) {
-    const title = document.getElementById("announcementTitle").value.trim();
-    const content = document.getElementById("announcementContent").value.trim();
-    if (!title || !content) return showToast("请填写公告标题和内容");
+  const editAnnouncement = event.target.closest("[data-edit-announcement]");
+  if (editAnnouncement) {
+    openAnnouncementEditor(findAnnouncement(editAnnouncement.dataset.editAnnouncement));
+    return;
+  }
+
+  // 上架 / 下架：同一个按钮来回切，data-status 是"当前状态"。
+  const announcementStatus = event.target.closest("[data-announcement-status]");
+  if (announcementStatus) {
+    const nextStatus = Number(announcementStatus.dataset.status) ? 0 : 1;
     try {
-      await api("/api/admin/announcements", {
-        method: "POST",
-        body: { title, content },
+      await api(`/api/admin/announcements/${announcementStatus.dataset.announcementStatus}`, {
+        method: "PUT",
+        body: { status: nextStatus },
       });
-      closeModal();
-      showToast("公告已发布");
+      showToast(nextStatus === 1 ? "公告已重新发布" : "公告已下架，前台不再展示");
+      await renderSection("announcements");
+    } catch (error) {
+      showToast(error.message);
+    }
+    return;
+  }
+
+  const deleteAnnouncement = event.target.closest("[data-delete-announcement]");
+  if (deleteAnnouncement) {
+    const announcement = findAnnouncement(deleteAnnouncement.dataset.deleteAnnouncement);
+    if (!announcement) return;
+    if (!window.confirm(`确定彻底删除公告「${announcement.title}」吗？删除后无法恢复。`)) return;
+    try {
+      await api(`/api/admin/announcements/${announcement.id}`, { method: "DELETE" });
+      showToast("公告已删除");
       await renderSection("announcements");
     } catch (error) {
       showToast(error.message);
@@ -1174,16 +1209,18 @@ modalBackdrop.addEventListener("click", async (event) => {
 
   const saveAnnouncement = event.target.closest("[data-save-announcement]");
   if (saveAnnouncement) {
+    // 编辑时按钮上带 id → 走 PUT 只改文案，不动上下架状态。
+    const id = saveAnnouncement.dataset.saveAnnouncement;
     const title = document.getElementById("announcementTitle").value.trim();
     const content = document.getElementById("announcementContent").value.trim();
     if (!title || !content) return showToast("请填写公告标题和内容");
     try {
-      await api("/api/admin/announcements", {
-        method: "POST",
+      await api(id ? `/api/admin/announcements/${id}` : "/api/admin/announcements", {
+        method: id ? "PUT" : "POST",
         body: { title, content },
       });
       closeModal();
-      showToast("公告已发布");
+      showToast(id ? "公告已保存" : "公告已发布");
       await renderSection("announcements");
     } catch (error) {
       showToast(error.message);

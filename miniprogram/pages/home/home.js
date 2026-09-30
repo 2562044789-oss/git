@@ -27,6 +27,11 @@ function buildAcceptorAd(acceptor) {
   };
 }
 
+// 公告时间只展示到「天」，列表和详情都不需要精确到秒
+function decorateAnnouncement(item) {
+  return { ...item, dateText: String(item.created_at || "").slice(0, 10) };
+}
+
 Page({
   data: {
     user: null,
@@ -34,6 +39,8 @@ Page({
     categories: [],
     tasks: [],
     announcements: [],
+    // 首页公告位只摆 3 条，另存总数用于显示「全部 N 条」
+    announcementTotal: 0,
     acceptorAd: buildAcceptorAd(null),
     // 首页轮播当前页与圆点。圆点数量必须和 home.wxml 里 swiper-item 的数量一致。
     heroIndex: 0,
@@ -66,7 +73,8 @@ Page({
       this.setData({
         user: profile,
         unread: profile.stats.unread,
-        announcements: config.announcements,
+        announcements: (config.announcements || []).slice(0, 3).map(decorateAnnouncement),
+        announcementTotal: Number(config.announcement_total || 0) || (config.announcements || []).length,
         acceptorAd: buildAcceptorAd(profile.acceptor),
         categories: categories.map((item) => ({
           ...item,
@@ -99,6 +107,16 @@ Page({
 
   goAcceptor() {
     wx.navigateTo({ url: "/pages/acceptor/acceptor" });
+  },
+
+  goAnnouncements() {
+    wx.navigateTo({ url: "/pages/announcements/announcements" });
+  },
+
+  goAnnouncement(event) {
+    wx.navigateTo({
+      url: `/pages/announcement-detail/announcement-detail?id=${event.currentTarget.dataset.id}`,
+    });
   },
 
   // swiper 的滑动/自动播放都会触发，只用来同步下方圆点

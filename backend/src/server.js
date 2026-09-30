@@ -409,9 +409,15 @@ async function handleApi(req, res, url) {
     });
   }
 
+  // 公开路径：无需登录即可访问。
+  // 公告列表/详情也要公开 —— 小程序首页在登录前就会渲染公告条，
+  // 若强制鉴权，未登录用户会看到一个空白的公告区。
+  const isPublicAnnouncement =
+    pathname === "/api/announcements" || /^\/api\/announcements\/\d+$/.test(pathname);
   const publicPaths =
     method === "GET" &&
-    ["/api/config", "/api/categories", "/api/tasks"].includes(pathname);
+    (["/api/config", "/api/categories", "/api/tasks"].includes(pathname) ||
+      isPublicAnnouncement);
   let identity = null;
   if (!publicPaths) {
     identity = authenticate(req, pathname.startsWith("/api/admin/"));
@@ -420,9 +426,16 @@ async function handleApi(req, res, url) {
   }
 
   if (method === "GET" && pathname === "/api/config") {
+    // 首页公告条最多摆 3 条，这里多给 2 条冗余，
+    // 避免"刚好第 4 条公告看不到也点不进列表"。
     const announcements = all(
-      "SELECT id, title, content, created_at FROM announcements WHERE status = 1 ORDER BY id DESC LIMIT 3",
+      "SELECT id, title, content, created_at FROM announcements WHERE status = 1 ORDER BY id DESC LIMIT 5",
     );
+    // 首页只能摆 3 条，带上总数才能显示「全部 N 条」，
+    // 让用户知道后面还有公告没展开，而不是以为管理员的第 4 条丢了。
+    const announcementTotal = get(
+      "SELECT COUNT(*) AS total FROM announcements WHERE status = 1",
+    ).total;
     return ok(res, {
       app_name: "阳光社区邻里快办",
       service_fee_rate: serviceFeeRate,
@@ -430,11 +443,41 @@ async function handleApi(req, res, url) {
       withdraw_mode: withdrawMode,
       acceptor_deposit: ACCEPTOR_DEPOSIT_AMOUNT,
       announcements,
+      announcement_total: announcementTotal,
     });
   }
 
   if (method === "GET" && pathname === "/api/categories") {
     return ok(res, all("SELECT * FROM categories WHERE status = 1 ORDER BY sort, id"));
+  }
+
+  // 公告列表：公开接口，供「公告中心」页翻看全部启用公告。
+  // 首页物理上只放得下 3 条，管理员发的第 4 条以后必须在这里能翻到，
+  // 否则新公告等于石沉大海。
+  if (method === "GET" && pathname === "/api/announcements") {
+    const { page, pageSize } = readPagination(url, 20, 100);
+    const total = get(
+      "SELECT COUNT(*) AS total FROM announcements WHERE status = 1",
+    ).total;
+    const list = all(
+      `SELECT id, title, content, created_at FROM announcements
+       WHERE status = 1 ORDER BY id DESC LIMIT ? OFFSET ?`,
+      [pageSize, (page - 1) * pageSize],
+    );
+    return ok(res, { list, total, page, pageSize });
+  }
+
+  // 公告详情：列表里其实已经带了 content，
+  // 但这个接口让详情页可以按 id 直接刷新/深链，不必依赖列表缓存。
+  // status = 1 的条件写在 SQL 里 —— 已下架公告一律 404，不靠调用方过滤。
+  const announcementDetailMatch = pathname.match(/^\/api\/announcements\/(\d+)$/);
+  if (method === "GET" && announcementDetailMatch) {
+    const announcement = get(
+      "SELECT id, title, content, created_at FROM announcements WHERE id = ? AND status = 1",
+      [Number(announcementDetailMatch[1])],
+    );
+    if (!announcement) throw new HttpError(404, "公告不存在或已下架");
+    return ok(res, announcement);
   }
 
   if (method === "GET" && pathname === "/api/tasks") {
@@ -1996,7 +2039,64 @@ async function handleApi(req, res, url) {
       String(body.title),
       String(body.content),
     ]);
+    logOperation(
+      identity,
+      "publish_announcement",
+      "announcement",
+      result.lastInsertRowid,
+      String(body.title),
+      req,
+    );
     return ok(res, get("SELECT * FROM announcements WHERE id = ?", [result.lastInsertRowid]), "公告已发布");
+  }
+
+  // 公告改 / 撤：补齐"只能发、发错没法收"的缺口。
+  // 三种用途共用这个接口：
+  //   1) 只传 title/content  → 改文案，状态不变；
+  //   2) 只传 status        → 上架 / 下架（下架后前台列表与详情都会消失）；
+  //   3) 都传               → 改文案顺便上下架。
+  const adminAnnouncementMatch = pathname.match(/^\/api\/admin\/announcements\/(\d+)$/);
+  if (method === "PUT" && adminAnnouncementMatch) {
+    const id = Number(adminAnnouncementMatch[1]);
+    const existing = get("SELECT * FROM announcements WHERE id = ?", [id]);
+    if (!existing) throw new HttpError(404, "公告不存在");
+    const body = await parseBody(req);
+    // 未传的字段保持原值，避免"只想下架却把正文清空"。
+    const title =
+      body.title === undefined ? existing.title : optionalText(body.title, 60);
+    const content =
+      body.content === undefined ? existing.content : optionalText(body.content, 500);
+    requireValue(title && content, "公告标题和内容不能为空");
+    let status = Number(existing.status);
+    if (body.status !== undefined) {
+      const next = Number(body.status);
+      requireValue(next === 0 || next === 1, "公告状态只能是 0（下架）或 1（发布）");
+      status = next;
+    }
+    run("UPDATE announcements SET title = ?, content = ?, status = ? WHERE id = ?", [
+      title,
+      content,
+      status,
+      id,
+    ]);
+    logOperation(identity, "update_announcement", "announcement", id, `${existing.title} → ${title}`, req);
+    return ok(
+      res,
+      get("SELECT * FROM announcements WHERE id = ?", [id]),
+      status === 1 ? "公告已更新" : "公告已下架，前台不再展示",
+    );
+  }
+
+  // 彻底删除不可逆，比"下架"更重，按破坏性后台操作要求超级管理员。
+  // 一般撤回公告用上面的下架即可；删除只留给发错的测试公告。
+  if (method === "DELETE" && adminAnnouncementMatch) {
+    requireSuperAdmin(identity);
+    const id = Number(adminAnnouncementMatch[1]);
+    const existing = get("SELECT id, title FROM announcements WHERE id = ?", [id]);
+    if (!existing) throw new HttpError(404, "公告不存在");
+    run("DELETE FROM announcements WHERE id = ?", [id]);
+    logOperation(identity, "delete_announcement", "announcement", id, existing.title, req);
+    return ok(res, null, "公告已删除");
   }
 
   throw new HttpError(404, "接口不存在");

@@ -1,0 +1,14 @@
+<view class="page notice-detail-page page-no-tab">
+  <view wx:if="{{notice}}" class="notice-detail card">
+    <view class="notice-detail-title">{{notice.title}}</view>
+    <view class="notice-detail-meta">阳光社区居委会 · {{notice.dateText}}</view>
+    <view class="notice-detail-divider"></view>
+    <view class="notice-detail-body">{{notice.content}}</view>
+  </view>
+
+  <view wx:elif="{{!loading}}" class="empty card">
+    <view class="empty-symbol">告</view>
+    <view class="empty-title">公告不存在</view>
+    <view>这条公告可能已被撤下</view>
+  </view>
+</view>

@@ -914,3 +914,140 @@ test("后台仪表盘会统计接单员数量与待审核申请", async () => {
     "应统计待审核的认证申请数量",
   );
 });
+
+// 回归背景：修复前 /api/config 的公告是 LIMIT 3，而前端只渲染 announcements[0]，
+// 于是"管理员发第 2 条以后就再也看不到"。下面三条用例分别锁住后端的三个出口。
+test("公告列表返回全部启用公告，不再受首页展示条数限制", async () => {
+  const adminToken = await loginAdmin();
+  const before = await api("GET", "/api/announcements");
+  assert.equal(before.status, 200);
+  const baseTotal = Number(before.body.data.total);
+  assert.ok(baseTotal >= 2, `种子数据应至少有 2 条公告，实际 ${baseTotal}`);
+
+  // 模拟"管理员连发多条"，这是用户实际遇到的场景
+  const titles = [];
+  for (let i = 1; i <= 4; i += 1) {
+    const title = `回归测试公告 ${i}`;
+    titles.push(title);
+    const created = await api("POST", "/api/admin/announcements", {
+      token: adminToken,
+      body: { title, content: `第 ${i} 条公告的正文，用于验证多条公告都能被前台读到。` },
+    });
+    assert.equal(created.status, 200);
+  }
+
+  const after = await api("GET", "/api/announcements");
+  assert.equal(Number(after.body.data.total), baseTotal + 4);
+  const returnedTitles = after.body.data.list.map((item) => item.title);
+  for (const title of titles) {
+    assert.ok(returnedTitles.includes(title), `新发布的「${title}」必须出现在公告列表里`);
+  }
+});
+
+test("公告详情接口公开可读，未登录也能拿到全文，不存在返回 404", async () => {
+  const list = await api("GET", "/api/announcements");
+  const first = list.body.data.list[0];
+  assert.ok(first, "公告列表不应为空");
+
+  // 不带 token：公告详情是公开接口，未登录用户也必须能读到正文
+  const detail = await api("GET", `/api/announcements/${first.id}`);
+  assert.equal(detail.status, 200);
+  assert.equal(detail.body.data.id, first.id);
+  assert.equal(detail.body.data.content, first.content, "详情必须包含完整正文");
+
+  const missing = await api("GET", "/api/announcements/999999");
+  assert.equal(missing.status, 404);
+});
+
+test("/api/config 下发首页用公告并附带总数，条数不超过 5", async () => {
+  const config = await api("GET", "/api/config");
+  assert.equal(config.status, 200);
+  const { announcements, announcement_total: announcementTotal } = config.body.data;
+  assert.ok(Array.isArray(announcements));
+  assert.ok(announcements.length > 0, "首页应至少拿到一条公告");
+  assert.ok(announcements.length <= 5, "首页只下发最近 5 条，避免响应体随公告数膨胀");
+
+  const list = await api("GET", "/api/announcements");
+  assert.equal(
+    Number(announcementTotal),
+    Number(list.body.data.total),
+    "总数必须与公告列表一致，否则首页「全部 N 条」会显示错误",
+  );
+  assert.ok(
+    Number(announcementTotal) > announcements.length,
+    "构造出的公告条数应多于首页下发条数，才能证明总数确实来自后端而非数组长度",
+  );
+});
+
+// 回归背景：公告发布口子补齐后，后台仍只能"发"，发错了撤不掉。
+// 这条用例覆盖整条撤回链路：改文案 → 下架 → 重新发布 → 删除。
+test("后台公告支持改文案、下架、重新发布与删除", async () => {
+  const adminToken = await loginAdmin();
+
+  const created = await api("POST", "/api/admin/announcements", {
+    token: adminToken,
+    body: { title: "待撤回公告", content: "验证后台撤回能力。" },
+  });
+  assert.equal(created.status, 200);
+  const id = created.body.data.id;
+
+  // 只改文案：不能顺手把发布状态也改了
+  const edited = await api("PUT", `/api/admin/announcements/${id}`, {
+    token: adminToken,
+    body: { title: "改过的标题", content: "改过的正文。" },
+  });
+  assert.equal(edited.status, 200);
+  assert.equal(edited.body.data.title, "改过的标题");
+  assert.equal(Number(edited.body.data.status), 1, "只改文案不应改变发布状态");
+
+  // 下架：前台列表、详情、总数三处同步消失
+  const beforeTotal = Number((await api("GET", "/api/announcements")).body.data.total);
+  const unpublish = await api("PUT", `/api/admin/announcements/${id}`, {
+    token: adminToken,
+    body: { status: 0 },
+  });
+  assert.equal(unpublish.status, 200);
+  assert.equal(Number(unpublish.body.data.status), 0);
+
+  const afterList = await api("GET", "/api/announcements");
+  assert.equal(Number(afterList.body.data.total), beforeTotal - 1);
+  assert.ok(!afterList.body.data.list.some((item) => Number(item.id) === Number(id)));
+  assert.equal((await api("GET", `/api/announcements/${id}`)).status, 404, "下架后详情应 404");
+
+  // 后台仍保留该条且带 status，前端据此显示"已下架"并允许重新发布
+  const adminList = await api("GET", "/api/admin/announcements", { token: adminToken });
+  const dormant = adminList.body.data.find((item) => Number(item.id) === Number(id));
+  assert.ok(dormant, "下架公告应保留在后台列表");
+  assert.equal(Number(dormant.status), 0);
+
+  // 重新发布：回到前台
+  const republish = await api("PUT", `/api/admin/announcements/${id}`, {
+    token: adminToken,
+    body: { status: 1 },
+  });
+  assert.equal(republish.status, 200);
+  assert.equal((await api("GET", `/api/announcements/${id}`)).status, 200);
+
+  // 入参防御：非法状态 / 空标题 / 不存在的 id 都不能落库
+  const badStatus = await api("PUT", `/api/admin/announcements/${id}`, {
+    token: adminToken,
+    body: { status: 9 },
+  });
+  assert.equal(badStatus.status, 400);
+  const emptyTitle = await api("PUT", `/api/admin/announcements/${id}`, {
+    token: adminToken,
+    body: { title: "   " },
+  });
+  assert.equal(emptyTitle.status, 400);
+  const ghost = await api("PUT", "/api/admin/announcements/999999", {
+    token: adminToken,
+    body: { status: 0 },
+  });
+  assert.equal(ghost.status, 404);
+
+  // 删除是不可逆操作：未登录拦在门口，登录后彻底移除
+  assert.equal((await api("DELETE", `/api/admin/announcements/${id}`)).status, 401);
+  const deleted = await api("DELETE", `/api/admin/announcements/${id}`, { token: adminToken });
+  assert.equal(deleted.status, 200);
+  assert.equal((await api("GET", `/api/announcements/${id}`)).status, 404);
+});

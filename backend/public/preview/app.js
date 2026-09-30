@@ -5,6 +5,7 @@ const state = {
   categories: [],
   tasks: [],
   orders: [],
+  announcements: [],
   view: "home",
   taskCategoryId: 0,
   taskSort: "newest",
@@ -258,6 +259,61 @@ function setTabBar(visible) {
   });
 }
 
+// 公告时间只展示到「天」，弹窗与列表都不需要精确到秒
+function shortDate(value) {
+  return String(value || "").slice(0, 10);
+}
+
+// 首页公告条：紧凑一行，点击后弹层看全文。
+// 这里刻意只放标题 —— 详情交给 openAnnouncement，
+// 首页放全文会把下面的「快捷服务」挤到屏幕外。
+function announcementRow(item) {
+  return `
+    <button class="announcement-item" data-announcement="${item.id}">
+      <span class="announcement-item-main">
+        <span class="announcement-item-title">${escapeHtml(item.title)}</span>
+        <span class="announcement-item-date">${escapeHtml(shortDate(item.created_at))}</span>
+      </span>
+      <span class="announcement-item-chevron" aria-hidden="true">›</span>
+    </button>
+  `;
+}
+
+// 公告中心卡片：直接把正文铺出来，
+// 用户抱怨的「只能看见标题」在这一页必须彻底解决 —— 不点也能读到全文。
+function announcementCard(item) {
+  return `
+    <article class="announcement-card">
+      <div class="announcement-card-head">
+        <h3 class="announcement-card-title">${escapeHtml(item.title)}</h3>
+        <span class="announcement-item-date">${escapeHtml(shortDate(item.created_at))}</span>
+      </div>
+      <p class="announcement-card-body">${escapeHtml(item.content)}</p>
+    </article>
+  `;
+}
+
+// 详情弹层优先读「公告中心」已加载的全量列表，找不到再退回首页那几条。
+function findAnnouncement(id) {
+  const pools = [state.announcements, state.config?.announcements];
+  for (const pool of pools) {
+    const hit = (pool || []).find((item) => String(item.id) === String(id));
+    if (hit) return hit;
+  }
+  return null;
+}
+
+function openAnnouncement(id) {
+  const item = findAnnouncement(id);
+  if (!item) return showToast("这条公告已不可用");
+  openModal(`
+    <h2 class="modal-title">${escapeHtml(item.title)}</h2>
+    <p class="modal-note">阳光社区居委会 · ${escapeHtml(shortDate(item.created_at))}</p>
+    <div class="announcement-body">${escapeHtml(item.content)}</div>
+    <div class="modal-actions"><button class="ghost-button" data-modal-close>关闭</button></div>
+  `);
+}
+
 function taskCard(task) {
   return `
     <article class="task-card" data-task-id="${task.id}">
@@ -293,7 +349,9 @@ function renderHome() {
   state.view = "home";
   setTabBar(true);
   const tasks = state.tasks.slice(0, 3);
-  const announcement = state.config?.announcements?.[0];
+  // 首页公告位固定放 3 条；总数取自后端，用来提示「还有多少条没展开」
+  const homeAnnouncements = (state.config?.announcements || []).slice(0, 3);
+  const announcementTotal = state.config?.announcement_total ?? homeAnnouncements.length;
   const slides = heroSlides();
   app.innerHTML = `
     <section class="view">
@@ -330,11 +388,18 @@ function renderHome() {
       </section>
 
       ${
-        announcement
-          ? `<div class="announcement">
-              <span class="announcement-label">社区公告</span>
-              <span class="announcement-text">${escapeHtml(announcement.title)}</span>
-            </div>`
+        homeAnnouncements.length
+          ? `<section class="announcement-board">
+              <div class="announcement-board-head">
+                <span class="announcement-label">社区公告</span>
+                <button class="section-link" data-view="announcements">
+                  全部 ${announcementTotal} 条 ›
+                </button>
+              </div>
+              <div class="announcement-list">
+                ${homeAnnouncements.map(announcementRow).join("")}
+              </div>
+            </section>`
           : ""
       }
 
@@ -370,6 +435,34 @@ function renderHome() {
     </section>
   `;
   initHeroCarousel();
+}
+
+// 公告中心：把后端全部启用公告一次拉齐并铺开正文。
+// 首页只有 3 格，管理员发第 4 条起就必须靠这一页才能被看到。
+async function renderAnnouncements() {
+  state.view = "announcements";
+  setTabBar(true);
+  const data = await api("/api/announcements?pageSize=50");
+  state.announcements = data.list || [];
+  window.scrollTo({ top: 0 });
+  app.innerHTML = `
+    <section class="view">
+      <header class="view-header">
+        <div>
+          <h1 class="view-title">社区公告</h1>
+          <p class="view-subtitle">共 ${Number(data.total) || 0} 条通知，正文直接展示</p>
+        </div>
+        <button class="ghost-button" data-view="home">返回首页</button>
+      </header>
+      <div class="announcement-list">
+        ${
+          state.announcements.length
+            ? state.announcements.map(announcementCard).join("")
+            : '<div class="empty-state"><strong>暂无公告</strong>管理员发布后会出现在这里</div>'
+        }
+      </div>
+    </section>
+  `;
 }
 
 // 首页广告轮播。滑动手势交给横向滚动（scroll-snap）本身，不自己模拟 touch 事件——
@@ -1263,7 +1356,15 @@ app.addEventListener("click", async (event) => {
       await renderOrders();
     } else if (view === "profile") {
       await renderProfile();
+    } else if (view === "announcements") {
+      await renderAnnouncements();
     }
+    return;
+  }
+
+  const announcementTarget = event.target.closest("[data-announcement]");
+  if (announcementTarget) {
+    openAnnouncement(announcementTarget.dataset.announcement);
     return;
   }
 

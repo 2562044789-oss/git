@@ -95,10 +95,24 @@
     ></view>
   </view>
 
-  <view wx:if="{{announcements.length}}" class="announcement-row">
-    <view class="announcement-label">社区公告</view>
-    <view class="grow announcement-copy">{{announcements[0].title}}</view>
-    <text class="muted">›</text>
+  <view wx:if="{{announcements.length}}" class="announcement-board">
+    <view class="announcement-board-head">
+      <view class="announcement-label">社区公告</view>
+      <view class="announcement-more" bindtap="goAnnouncements">全部 {{announcementTotal}} 条 ›</view>
+    </view>
+    <view
+      wx:for="{{announcements}}"
+      wx:key="id"
+      class="announcement-item"
+      data-id="{{item.id}}"
+      bindtap="goAnnouncement"
+    >
+      <view class="announcement-item-main">
+        <view class="announcement-item-title">{{item.title}}</view>
+        <view class="announcement-item-date">{{item.dateText}}</view>
+      </view>
+      <text class="announcement-item-chevron">›</text>
+    </view>
   </view>
 
   <view class="section">

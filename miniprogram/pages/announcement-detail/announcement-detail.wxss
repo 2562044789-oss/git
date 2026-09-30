@@ -1,0 +1,41 @@
+.notice-detail-page {
+  padding-top: 18rpx;
+}
+
+.notice-detail {
+  margin-top: 10rpx;
+  padding: 32rpx 28rpx;
+}
+
+.notice-detail-title {
+  font-size: 38rpx;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.notice-detail-meta {
+  margin-top: 14rpx;
+  color: #93a29a;
+  font-size: 22rpx;
+}
+
+.notice-detail-divider {
+  height: 1rpx;
+  margin: 24rpx 0;
+  background: #e6efe9;
+}
+
+.notice-detail-body {
+  color: #4a5c51;
+  font-size: 28rpx;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.empty-symbol {
+  margin-bottom: 12rpx;
+  color: #a8c9b5;
+  font-size: 74rpx;
+  font-weight: 800;
+}

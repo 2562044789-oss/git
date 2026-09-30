@@ -11,7 +11,12 @@
  *   node scripts/screenshot.js --url http://127.0.0.1:3000/preview/ --out shot.png
  *   node scripts/screenshot.js --url <URL> --out shot.png --slide 2        # 截图前把轮播滑到第 2 张
  *   node scripts/screenshot.js --url <URL> --out shot.png --width 390 --height 900 --full
+ *   node scripts/screenshot.js --url http://127.0.0.1:3000/admin/ --out shot.png \
+ *     --wait-for "#adminLogin" --script '...'                              # 截非首页（管理后台等）
  *   EDGE_PATH=/path/to/chrome node scripts/screenshot.js ...               # 指定浏览器
+ *
+ * --wait-for 默认 #heroTrack（预览页首页的轮播容器）。截管理后台这类没有轮播的页面时
+ * 必须改掉，否则会一直等不到元素、20 秒后超时退出。
  */
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
@@ -37,6 +42,7 @@ function parseArgs(argv) {
     slide: 1,
     port: 9333,
     full: false,
+    waitFor: "#heroTrack",
   };
   for (let i = 0; i < argv.length; i += 1) {
     const key = argv[i];
@@ -51,6 +57,7 @@ function parseArgs(argv) {
     if (name === "url") args.url = value;
     else if (name === "out") args.out = value;
     else if (name === "script") args.script = value;
+    else if (name === "wait-for") args.waitFor = value;
     else if (name in args) args[name] = Number(value);
   }
   return args;
@@ -128,7 +135,7 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (!args.url || !args.out) {
     console.error(
-      "用法: node scripts/screenshot.js --url <URL> --out <PNG> [--slide N] [--width 390] [--height 900] [--full]",
+      "用法: node scripts/screenshot.js --url <URL> --out <PNG> [--slide N] [--wait-for <选择器>] [--script <JS>] [--width 390] [--height 900] [--full]",
     );
     process.exit(1);
   }
@@ -178,16 +185,17 @@ async function main() {
     await client.send("Page.navigate", { url: args.url });
     await loaded;
 
-    // 等业务内容真的渲染出来，否则可能截到"正在进入阳光社区"的过渡页
+    // 等业务内容真的渲染出来，否则可能截到"正在进入阳光社区"的过渡页。
+    // 等哪个元素由 --wait-for 决定，默认是预览页首页的轮播容器。
     await waitFor(
       async () => {
         const { result } = await client.send("Runtime.evaluate", {
-          expression: "Boolean(document.getElementById('heroTrack'))",
+          expression: `Boolean(document.querySelector(${JSON.stringify(args.waitFor)}))`,
           returnByValue: true,
         });
         return result.value;
       },
-      { label: "首页渲染完成" },
+      { label: `元素 ${args.waitFor} 出现` },
     );
 
     if (args.slide > 1) {
@@ -212,14 +220,19 @@ async function main() {
 
     await new Promise((resolve) => setTimeout(resolve, args.wait));
 
-    // 打出真实状态，避免"截图看着对但其实没滑过去"这类误判
+    // 打出真实状态，避免"截图看着对但其实没滑过去"这类误判。
+    // 非首页（没有 heroTrack）时给一句说明就行，不要因为读不到轮播而整条命令失败。
     const { result: probe } = await client.send("Runtime.evaluate", {
-      expression: `JSON.stringify({
-        scrollLeft: Math.round(document.getElementById("heroTrack").scrollLeft),
-        pageWidth: document.getElementById("heroTrack").clientWidth,
-        activeDot: [...document.querySelectorAll(".hero-dot")].findIndex((d) => d.classList.contains("active")) + 1,
-        dots: document.querySelectorAll(".hero-dot").length,
-      })`,
+      expression: `JSON.stringify((() => {
+        const track = document.getElementById("heroTrack");
+        if (!track) return { note: "当前页面没有轮播" };
+        return {
+          scrollLeft: Math.round(track.scrollLeft),
+          pageWidth: track.clientWidth,
+          activeDot: [...document.querySelectorAll(".hero-dot")].findIndex((d) => d.classList.contains("active")) + 1,
+          dots: document.querySelectorAll(".hero-dot").length,
+        };
+      })())`,
       returnByValue: true,
     });
 

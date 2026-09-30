@@ -455,15 +455,21 @@ button {
   content: "";
 }
 
-.announcement {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.announcement-board {
   margin-top: 14px;
-  padding: 14px 16px;
+  padding: 12px 14px 6px;
   border: 1px solid var(--line);
   border-radius: 15px;
   background: #fff;
+}
+
+.announcement-board-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--line);
 }
 
 .announcement-label {
@@ -476,12 +482,103 @@ button {
   font-weight: 800;
 }
 
-.announcement-text {
+.announcement-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.announcement-board .announcement-list {
+  margin-top: 4px;
+}
+
+.announcement-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.announcement-board .announcement-item:last-child {
+  border-bottom: 0;
+}
+
+.announcement-item:hover .announcement-item-title {
+  color: var(--primary-strong);
+}
+
+.announcement-item-main {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.announcement-item-title {
   overflow: hidden;
-  color: var(--ink-soft);
-  font-size: 12px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.announcement-item-date {
+  flex: none;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.announcement-item-chevron {
+  flex: none;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.announcement-card {
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: #fff;
+}
+
+.announcement-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.announcement-card-title {
+  margin: 0;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.announcement-card-body {
+  margin: 8px 0 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.announcement-body {
+  margin-top: 12px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .section {

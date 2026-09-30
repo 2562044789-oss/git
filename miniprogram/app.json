@@ -9,6 +9,8 @@
     "pages/task-detail/task-detail",
     "pages/order-detail/order-detail",
     "pages/acceptor/acceptor",
+    "pages/announcements/announcements",
+    "pages/announcement-detail/announcement-detail",
     "pages/messages/messages",
     "pages/wallet/wallet",
     "pages/addresses/addresses",
