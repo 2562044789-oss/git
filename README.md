@@ -45,6 +45,11 @@
 
 - 身份证号按 GB 11643-1999 校验位数、出生日期与校验位
 - 同一身份证号只能绑定一个账号，防止一人多号刷单
+- **实名认证只做离线格式校验，不联网核验真伪**：接口验的是"号码格式对不对、有没有抄错"，
+  不是"号码是否真属于这个人"。虚构的号码只要校验位算对就能通过并进入"待审核"；
+  真伪由管理员在后台人工比对证件照片。这是本项目的既定边界，不是未完成的 TODO ——
+  接入公安/运营商核验需要企业资质与付费接口，属部署方的运营决策。
+  该边界由 `scripts/verify-acceptor-idcard.js` 用虚构号码实际跑通并钉成断言
 - 所有接口返回的身份证号一律脱敏（保留前 6 位与后 4 位）；完整号码只有超级管理员可通过专用接口查看，且每次查看都会写入审计日志
 - 接单被拦截时，接口返回 403 并给出具体原因（"缺哪一步"），前端会直接引导用户前往认证页
 - 退出接单员需先结清进行中的订单，退出后保证金原路退回钱包余额
@@ -124,11 +129,14 @@ node --no-warnings src/server.js
 ```powershell
 node --no-warnings --test                           # 接口回归测试（30 个用例）
 node --no-warnings scripts/verify-acceptor-ad.js    # 接单员广告的按钮文案、认证入口与已删除项回归（28 项）
+node --no-warnings scripts/verify-acceptor-idcard.js # 身份证校验强度：验了什么、没验什么（10 项）
 node --no-warnings scripts/verify-hero-carousel.js  # 首页广告轮播的数据与结构（37 项）
 node --no-warnings scripts/screenshot.js --url http://127.0.0.1:3000/preview/ --out shot.png --slide 2
 ```
 
-两个 `verify-*` 脚本会把前端的文案函数从源码里切出来真求值，测的是上线代码本身；
+`verify-acceptor-ad.js` / `verify-hero-carousel.js` 会把前端的文案函数从源码里切出来真求值，
+测的是上线代码本身；`verify-acceptor-idcard.js` 用临时库起一个后端，
+**用虚构的身份证号证明认证只做离线格式校验、不联网核验真伪**（详见下节）。
 `screenshot.js` 调用本机 Edge/Chrome 的 headless 模式截图（不下载浏览器），
 `--slide N` 表示截图前先把首页轮播切到第 N 张，可用 `EDGE_PATH` 指定浏览器路径。
 
