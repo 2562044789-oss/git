@@ -11,6 +11,10 @@ Page({
     tasks: [],
     total: 0,
     loading: true,
+    page: 1,
+    pageSize: 10,
+    hasMore: false,
+    loadingMore: false,
     filterOpen: false,
     activeCategoryName: "全部分类",
     activeSortLabel: "最新发布",
@@ -41,6 +45,23 @@ Page({
     this.loadTasks().finally(() => wx.stopPullDownRefresh());
   },
 
+  onReachBottom() {
+    if (!this.data.hasMore || this.data.loadingMore || this.data.loading) return;
+    this.loadMoreTasks();
+  },
+
+  buildTaskQuery() {
+    return [
+      `sort=${this.data.sort}`,
+      this.data.categoryId ? `categoryId=${this.data.categoryId}` : "",
+      this.data.keyword ? `keyword=${encodeURIComponent(this.data.keyword)}` : "",
+      `page=${this.data.page}`,
+      `pageSize=${this.data.pageSize}`,
+    ]
+      .filter(Boolean)
+      .join("&");
+  },
+
   async loadCategories() {
     const categories = await app.request({ url: "/api/categories", auth: false });
     const activeCategory = categories.find((item) => Number(item.id) === Number(this.data.categoryId));
@@ -51,22 +72,33 @@ Page({
   },
 
   async loadTasks() {
-    this.setData({ loading: true });
+    this.setData({ loading: true, page: 1 });
     try {
-      const query = [
-        `sort=${this.data.sort}`,
-        this.data.categoryId ? `categoryId=${this.data.categoryId}` : "",
-        this.data.keyword ? `keyword=${encodeURIComponent(this.data.keyword)}` : "",
-      ]
-        .filter(Boolean)
-        .join("&");
-      const data = await app.request({ url: `/api/tasks?${query}` });
+      const data = await app.request({ url: `/api/tasks?${this.buildTaskQuery()}` });
+      const list = data.list.map(decorateTask);
       this.setData({
-        tasks: data.list.map(decorateTask),
+        tasks: list,
         total: data.total,
+        hasMore: list.length < Number(data.total || 0),
       });
     } finally {
       this.setData({ loading: false });
+    }
+  },
+
+  async loadMoreTasks() {
+    this.setData({ loadingMore: true });
+    try {
+      this.setData({ page: this.data.page + 1 });
+      const data = await app.request({ url: `/api/tasks?${this.buildTaskQuery()}` });
+      const list = data.list.map(decorateTask);
+      this.setData({
+        tasks: this.data.tasks.concat(list),
+        total: data.total,
+        hasMore: this.data.tasks.length + list.length < Number(data.total || 0),
+      });
+    } finally {
+      this.setData({ loadingMore: false });
     }
   },
 

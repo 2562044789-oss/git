@@ -127,7 +127,8 @@ node --no-warnings src/server.js
 `backend` 目录下的脚本都无需额外依赖，直接运行即可：
 
 ```powershell
-node --no-warnings --test                           # 接口回归测试（30 个用例）
+node --no-warnings --test                           # 接口回归测试（34 个用例）
+node scripts/check-syntax.js                        # 语法检查（自动覆盖 src 下全部 .js，含 routes/ 子目录）
 node --no-warnings scripts/verify-acceptor-ad.js    # 接单员广告的按钮文案、认证入口与已删除项回归（28 项）
 node --no-warnings scripts/verify-acceptor-idcard.js # 身份证校验强度：验了什么、没验什么（10 项）
 node --no-warnings scripts/verify-hero-carousel.js  # 首页广告轮播的数据与结构（37 项）

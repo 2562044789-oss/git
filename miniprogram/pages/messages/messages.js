@@ -4,6 +4,10 @@ Page({
   data: {
     messages: [],
     type: "",
+    page: 1,
+    pageSize: 20,
+    hasMore: false,
+    loadingMore: false,
     filterOpen: false,
     activeTypeLabel: "全部消息",
     filters: [
@@ -23,15 +27,45 @@ Page({
     this.loadMessages().finally(() => wx.stopPullDownRefresh());
   },
 
+  onReachBottom() {
+    if (!this.data.hasMore || this.data.loadingMore) return;
+    this.loadMoreMessages();
+  },
+
+  buildMessageQuery() {
+    const parts = [`page=${this.data.page}`, `pageSize=${this.data.pageSize}`];
+    if (this.data.type) parts.push(`type=${this.data.type}`);
+    return `?${parts.join("&")}`;
+  },
+
+  decorate(batch) {
+    return batch.map((item) => ({
+      ...item,
+      typeText: { 1: "系统", 2: "任务", 3: "订单", 4: "投诉" }[Number(item.type)] || "通知",
+    }));
+  },
+
   async loadMessages() {
-    const query = this.data.type ? `?type=${this.data.type}` : "";
-    const messages = await app.request({ url: `/api/messages${query}` });
+    this.setData({ page: 1 });
+    const batch = await app.request({ url: `/api/messages${this.buildMessageQuery()}` });
+    // 消息接口返回数组、不带 total：本批拉满一页就认为还有下一页
     this.setData({
-      messages: messages.map((item) => ({
-        ...item,
-        typeText: { 1: "系统", 2: "任务", 3: "订单", 4: "投诉" }[Number(item.type)] || "通知",
-      })),
+      messages: this.decorate(batch),
+      hasMore: batch.length === this.data.pageSize,
     });
+  },
+
+  async loadMoreMessages() {
+    this.setData({ loadingMore: true, page: this.data.page + 1 });
+    try {
+      const batch = await app.request({ url: `/api/messages${this.buildMessageQuery()}` });
+      this.setData({
+        messages: this.data.messages.concat(this.decorate(batch)),
+        hasMore: batch.length === this.data.pageSize,
+      });
+    } finally {
+      this.setData({ loadingMore: false });
+    }
   },
 
   toggleFilter() {

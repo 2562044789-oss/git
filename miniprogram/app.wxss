@@ -338,3 +338,11 @@ button::after {
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);
 }
+
+/* 列表页上拉加载更多 / 到底提示（tasks / orders / messages 共用） */
+.list-footer {
+  text-align: center;
+  padding: 24rpx 0 32rpx;
+  color: var(--text-tertiary, #9aa5a0);
+  font-size: 24rpx;
+}

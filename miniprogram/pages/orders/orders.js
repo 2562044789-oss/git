@@ -7,7 +7,12 @@ Page({
     role: "published",
     status: "",
     orders: [],
+    total: 0,
     loading: true,
+    page: 1,
+    pageSize: 10,
+    hasMore: false,
+    loadingMore: false,
     filterOpen: false,
     activeStatusLabel: "全部订单",
     filters: [
@@ -40,17 +45,55 @@ Page({
     this.loadOrders().finally(() => wx.stopPullDownRefresh());
   },
 
+  onReachBottom() {
+    if (!this.data.hasMore || this.data.loadingMore || this.data.loading) return;
+    this.loadMoreOrders();
+  },
+
+  buildOrderQuery() {
+    return [
+      `role=${this.data.role}`,
+      this.data.status ? `status=${this.data.status}` : "",
+      `page=${this.data.page}`,
+      `pageSize=${this.data.pageSize}`,
+    ]
+      .filter(Boolean)
+      .join("&");
+  },
+
   async loadOrders(silent = false) {
-    if (!silent) this.setData({ loading: true });
+    const patch = { page: 1 };
+    if (!silent) patch.loading = true;
+    this.setData(patch);
     try {
-      const query = [`role=${this.data.role}`, this.data.status ? `status=${this.data.status}` : ""]
-        .filter(Boolean)
-        .join("&");
-      const result = await app.request({ url: `/api/orders?${query}` });
+      const result = await app.request({ url: `/api/orders?${this.buildOrderQuery()}` });
       const orderList = Array.isArray(result) ? result : result.list || [];
-      this.setData({ orders: orderList.map(decorateOrder), total: result.total || orderList.length });
+      const total = Number(result.total || orderList.length);
+      // 原先这里连续两次 setData（列表一次、loading 一次），合并减少一次跨线程通信
+      this.setData({
+        orders: orderList.map(decorateOrder),
+        total,
+        hasMore: orderList.length < total,
+      });
     } finally {
       this.setData({ loading: false });
+    }
+  },
+
+  async loadMoreOrders() {
+    this.setData({ loadingMore: true, page: this.data.page + 1 });
+    try {
+      const result = await app.request({ url: `/api/orders?${this.buildOrderQuery()}` });
+      const orderList = Array.isArray(result) ? result : result.list || [];
+      const total = Number(result.total || orderList.length);
+      const orders = this.data.orders.concat(orderList.map(decorateOrder));
+      this.setData({
+        orders,
+        total,
+        hasMore: orders.length < total,
+      });
+    } finally {
+      this.setData({ loadingMore: false });
     }
   },
 

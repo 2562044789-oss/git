@@ -1,4 +1,4 @@
-const { BASE_URL } = require("./config");
+const { BASE_URL, CANDIDATE_URLS, OVERRIDE_KEY } = require("./config");
 
 const STORAGE_KEYS = {
   token: "wechat_token",
@@ -25,6 +25,37 @@ App({
       this.globalData.token = token;
       this.globalData.user = user;
     }
+    this.probeBackend();
+  },
+
+  // 启动后异步探测可达的后端地址：按候选顺序依次请求 /api/config，
+  // 当前地址连不通就自动切到第一个能通的候选并记住选择（下次启动直接用它）。
+  // 探测失败不阻塞启动 —— 业务请求仍按当前地址走，失败时由 request 的错误提示兜底。
+  probeBackend() {
+    const candidates = [
+      this.globalData.baseUrl,
+      ...CANDIDATE_URLS.filter((url) => url !== this.globalData.baseUrl),
+    ];
+    const tryNext = (index) => {
+      const candidate = candidates[index];
+      if (!candidate) return;
+      wx.request({
+        url: `${candidate}/api/config`,
+        timeout: 2500,
+        success: (response) => {
+          if (response.statusCode !== 200) {
+            tryNext(index + 1);
+            return;
+          }
+          if (candidate !== this.globalData.baseUrl) {
+            this.globalData.baseUrl = candidate;
+            wx.setStorageSync(OVERRIDE_KEY, candidate);
+          }
+        },
+        fail: () => tryNext(index + 1),
+      });
+    };
+    tryNext(0);
   },
 
   getOrCreateDeviceId() {
@@ -141,7 +172,7 @@ App({
             const reason = String(error && error.errMsg ? error.errMsg : "");
             const message = reason.includes("timeout")
               ? `连接后端超时，请检查手机和电脑网络：${this.globalData.baseUrl}`
-              : `无法连接后端，请确认服务已启动：${this.globalData.baseUrl}`;
+              : `无法连接后端，请确认服务已启动：${this.globalData.baseUrl}（启动时会自动尝试候选地址，也可在 config.js 里调整）`;
             if (!silent) {
               wx.showToast({ title: message, icon: "none", duration: 3000 });
             }

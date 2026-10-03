@@ -47,6 +47,9 @@
         <view class="message-time">{{item.created_at}}</view>
       </view>
     </view>
+    <view wx:if="{{loadingMore}}" class="list-footer">加载中…</view>
+    <view wx:elif="{{hasMore}}" class="list-footer">上拉加载更多</view>
+    <view wx:else class="list-footer">已经到底了</view>
   </view>
 
   <view wx:else class="empty card">
