@@ -1,0 +1,320 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 1960" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <rect x="0" y="0" width="1440" height="1960" fill="#f8fafc"/>
+
+  <text x="720" y="40" text-anchor="middle" font-size="24" font-weight="700" fill="#0f172a">阳光社区邻里快办 · 数据库 E-R 图</text>
+  <text x="720" y="64" text-anchor="middle" font-size="13" fill="#64748b">16 张表 · Chen 表示法（矩形实体 / 菱形联系）· 属性仅列主键与关键字段</text>
+
+  <!-- ================= 联系线（先画，压在实体下层） ================= -->
+  <g stroke="#475569" stroke-width="1.8" fill="none">
+    <!-- 实名认证 1:1 -->
+    <line x1="205" y1="230" x2="205" y2="283"/>
+    <line x1="205" y1="347" x2="205" y2="400"/>
+    <!-- 发布 users→tasks -->
+    <polyline points="340,430 435,430 435,280"/>
+    <line x1="500" y1="250" x2="520" y2="250"/>
+    <!-- 承接 users→tasks -->
+    <line x1="340" y1="500" x2="370" y2="500"/>
+    <polyline points="500,500 560,500 560,320"/>
+    <!-- 属于 tasks→categories -->
+    <line x1="820" y1="220" x2="885" y2="220"/>
+    <line x1="1015" y1="220" x2="1080" y2="220"/>
+    <!-- 生成 tasks 1:1 orders -->
+    <line x1="670" y1="320" x2="670" y2="400"/>
+    <line x1="670" y1="460" x2="670" y2="540"/>
+    <!-- 评价 orders→reviews -->
+    <line x1="820" y1="600" x2="885" y2="600"/>
+    <line x1="1015" y1="600" x2="1080" y2="600"/>
+    <!-- 投诉 orders→complaints -->
+    <polyline points="820,690 860,690 860,870 885,870"/>
+    <line x1="1015" y1="870" x2="1080" y2="870"/>
+    <!-- 资金流水 orders→wallet_records -->
+    <line x1="670" y1="715" x2="670" y2="765"/>
+    <line x1="670" y1="825" x2="670" y2="900"/>
+    <!-- users 卫星总线（地址簿 / 消息 / 提现 / 充值，均 1:n） -->
+    <polyline points="70,480 30,480 30,1510 135,1510"/>
+    <line x1="30" y1="700" x2="135" y2="700"/>
+    <line x1="205" y1="730" x2="205" y2="770"/>
+    <line x1="30" y1="1000" x2="135" y2="1000"/>
+    <line x1="205" y1="1030" x2="205" y2="1040"/>
+    <line x1="30" y1="1280" x2="135" y2="1280"/>
+    <line x1="205" y1="1310" x2="205" y2="1320"/>
+    <line x1="205" y1="1540" x2="205" y2="1550"/>
+  </g>
+
+  <!-- 基数标注 -->
+  <g font-size="14" font-weight="700" fill="#b45309">
+    <text x="213" y="252">1</text><text x="213" y="382">1</text>
+    <text x="352" y="422">1</text><text x="506" y="240">n</text>
+    <text x="350" y="492">1</text><text x="568" y="340">n</text>
+    <text x="830" y="210">n</text><text x="1058" y="210">1</text>
+    <text x="680" y="352">1</text><text x="680" y="508">1</text>
+    <text x="830" y="590">1</text><text x="1058" y="590">n</text>
+    <text x="830" y="680">1</text><text x="1058" y="858">n</text>
+    <text x="680" y="735">1</text><text x="680" y="868">n</text>
+    <text x="46" y="470">1</text>
+    <text x="88" y="690">n</text><text x="88" y="990">n</text>
+    <text x="88" y="1270">n</text><text x="88" y="1500">n</text>
+  </g>
+
+  <!-- ================= 菱形联系 ================= -->
+  <g>
+    <polygon points="130,315 205,283 280,315 205,347" fill="#fffbeb" stroke="#b45309" stroke-width="1.5"/>
+    <text x="205" y="320" text-anchor="middle" font-size="13" font-weight="600" fill="#92400e">实名认证</text>
+
+    <polygon points="370,250 435,220 500,250 435,280" fill="#fffbeb" stroke="#b45309" stroke-width="1.5"/>
+    <text x="435" y="255" text-anchor="middle" font-size="13" font-weight="600" fill="#92400e">发布</text>
+
+    <polygon points="370,500 435,470 500,500 435,530" fill="#fffbeb" stroke="#b45309" stroke-width="1.5"/>
+    <text x="435" y="505" text-anchor="middle" font-size="13" font-weight="600" fill="#92400e">承接</text>
+
+    <polygon points="885,220 950,190 1015,220 950,250" fill="#fffbeb" stroke="#b45309" stroke-width="1.5"/>
+    <text x="950" y="225" text-anchor="middle" font-size="13" font-weight="600" fill="#92400e">属于</text>
+
+    <polygon points="600,430 670,400 740,430 670,460" fill="#fffbeb" stroke="#b45309" stroke-width="1.5"/>
+    <text x="670" y="435" text-anchor="middle" font-size="13" font-weight="600" fill="#92400e">生成</text>
+
+    <polygon points="885,600 950,570 1015,600 950,630" fill="#fffbeb" stroke="#b45309" stroke-width="1.5"/>
+    <text x="950" y="605" text-anchor="middle" font-size="13" font-weight="600" fill="#92400e">评价</text>
+
+    <polygon points="885,870 950,840 1015,870 950,900" fill="#fffbeb" stroke="#b45309" stroke-width="1.5"/>
+    <text x="950" y="875" text-anchor="middle" font-size="13" font-weight="600" fill="#92400e">投诉</text>
+
+    <polygon points="600,795 670,765 740,795 670,825" fill="#fffbeb" stroke="#b45309" stroke-width="1.5"/>
+    <text x="670" y="800" text-anchor="middle" font-size="13" font-weight="600" fill="#92400e">资金流水</text>
+
+    <polygon points="135,700 205,670 275,700 205,730" fill="#fffbeb" stroke="#b45309" stroke-width="1.5"/>
+    <text x="205" y="705" text-anchor="middle" font-size="13" font-weight="600" fill="#92400e">地址簿</text>
+
+    <polygon points="135,1000 205,970 275,1000 205,1030" fill="#fffbeb" stroke="#b45309" stroke-width="1.5"/>
+    <text x="205" y="1005" text-anchor="middle" font-size="13" font-weight="600" fill="#92400e">消息通知</text>
+
+    <polygon points="135,1280 205,1250 275,1280 205,1310" fill="#fffbeb" stroke="#b45309" stroke-width="1.5"/>
+    <text x="205" y="1285" text-anchor="middle" font-size="13" font-weight="600" fill="#92400e">提现</text>
+
+    <polygon points="135,1510 205,1480 275,1510 205,1540" fill="#fffbeb" stroke="#b45309" stroke-width="1.5"/>
+    <text x="205" y="1515" text-anchor="middle" font-size="13" font-weight="600" fill="#92400e">充值</text>
+  </g>
+
+  <!-- ================= 实体（数据表） ================= -->
+  <!-- 接单员认证资料 -->
+  <g>
+    <rect x="70" y="110" width="270" height="120" rx="10" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5"/>
+    <path d="M 70 120 a10 10 0 0 1 10 -10 h250 a10 10 0 0 1 10 10 v20 h-270 z" fill="#dbeafe"/>
+    <text x="205" y="140" text-anchor="middle" font-size="14" font-weight="700" fill="#1e40af">接单员认证资料（acceptor_profiles）</text>
+    <g font-size="11" fill="#334155">
+      <text x="82" y="162" font-weight="700">PK id　FK user_id（唯一，1:1）</text>
+      <text x="82" y="181">real_name · id_card_no（全局唯一）</text>
+      <text x="82" y="200">status 认证状态 · deposit_status 保证金</text>
+      <text x="82" y="219">reviewed_by · deposit_amount</text>
+    </g>
+  </g>
+
+  <!-- 用户 -->
+  <g>
+    <rect x="70" y="400" width="270" height="160" rx="10" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5"/>
+    <path d="M 70 410 a10 10 0 0 1 10 -10 h250 a10 10 0 0 1 10 10 v20 h-270 z" fill="#dbeafe"/>
+    <text x="205" y="430" text-anchor="middle" font-size="14" font-weight="700" fill="#1e40af">用户（users）</text>
+    <g font-size="11" fill="#334155">
+      <text x="82" y="452" font-weight="700">PK id</text>
+      <text x="82" y="471">uid / openid（微信唯一标识）</text>
+      <text x="82" y="490">nickname · avatar_url · phone</text>
+      <text x="82" y="509">community · building · room</text>
+      <text x="82" y="528">credit_score 信用分 · balance 余额</text>
+      <text x="82" y="547">role 角色 · status 状态</text>
+    </g>
+  </g>
+
+  <!-- 地址簿 -->
+  <g>
+    <rect x="70" y="770" width="270" height="120" rx="10" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5"/>
+    <path d="M 70 780 a10 10 0 0 1 10 -10 h250 a10 10 0 0 1 10 10 v20 h-270 z" fill="#dbeafe"/>
+    <text x="205" y="800" text-anchor="middle" font-size="14" font-weight="700" fill="#1e40af">地址簿（addresses）</text>
+    <g font-size="11" fill="#334155">
+      <text x="82" y="822" font-weight="700">PK id　FK user_id</text>
+      <text x="82" y="841">community · building · room · detail</text>
+      <text x="82" y="860">contact_name · phone · address_type</text>
+      <text x="82" y="879">is_default 默认地址</text>
+    </g>
+  </g>
+
+  <!-- 消息通知 -->
+  <g>
+    <rect x="70" y="1040" width="270" height="120" rx="10" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5"/>
+    <path d="M 70 1050 a10 10 0 0 1 10 -10 h250 a10 10 0 0 1 10 10 v20 h-270 z" fill="#dbeafe"/>
+    <text x="205" y="1070" text-anchor="middle" font-size="14" font-weight="700" fill="#1e40af">消息通知（messages）</text>
+    <g font-size="11" fill="#334155">
+      <text x="82" y="1092" font-weight="700">PK id　FK user_id</text>
+      <text x="82" y="1111">title · content</text>
+      <text x="82" y="1130">type 类型 · related_id 关联对象</text>
+      <text x="82" y="1149">is_read 已读</text>
+    </g>
+  </g>
+
+  <!-- 提现单 -->
+  <g>
+    <rect x="70" y="1320" width="270" height="120" rx="10" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5"/>
+    <path d="M 70 1330 a10 10 0 0 1 10 -10 h250 a10 10 0 0 1 10 10 v20 h-270 z" fill="#dbeafe"/>
+    <text x="205" y="1350" text-anchor="middle" font-size="14" font-weight="700" fill="#1e40af">提现单（withdraw_orders）</text>
+    <g font-size="11" fill="#334155">
+      <text x="82" y="1372" font-weight="700">PK id　FK user_id</text>
+      <text x="82" y="1391">withdraw_no（唯一）· amount</text>
+      <text x="82" y="1410">status · pay_mode（模拟）</text>
+      <text x="82" y="1429">paid_at</text>
+    </g>
+  </g>
+
+  <!-- 充值单 -->
+  <g>
+    <rect x="70" y="1550" width="270" height="120" rx="10" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5"/>
+    <path d="M 70 1560 a10 10 0 0 1 10 -10 h250 a10 10 0 0 1 10 10 v20 h-270 z" fill="#dbeafe"/>
+    <text x="205" y="1580" text-anchor="middle" font-size="14" font-weight="700" fill="#1e40af">充值单（recharge_orders）</text>
+    <g font-size="11" fill="#334155">
+      <text x="82" y="1602" font-weight="700">PK id　FK user_id</text>
+      <text x="82" y="1621">recharge_no（唯一）· amount</text>
+      <text x="82" y="1640">status · pay_mode（模拟）</text>
+      <text x="82" y="1659">paid_at</text>
+    </g>
+  </g>
+
+  <!-- 任务 -->
+  <g>
+    <rect x="520" y="160" width="300" height="160" rx="10" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5"/>
+    <path d="M 520 170 a10 10 0 0 1 10 -10 h280 a10 10 0 0 1 10 10 v20 h-300 z" fill="#dbeafe"/>
+    <text x="670" y="190" text-anchor="middle" font-size="14" font-weight="700" fill="#1e40af">任务（tasks）</text>
+    <g font-size="11" fill="#334155">
+      <text x="532" y="212" font-weight="700">PK id</text>
+      <text x="532" y="231">FK publisher_id 发布者 → users</text>
+      <text x="532" y="250">FK category_id → categories</text>
+      <text x="532" y="269">FK acceptor_id 接单者 → users</text>
+      <text x="532" y="288">title · reward 悬赏金额</text>
+      <text x="532" y="307">status 状态 · expect_time</text>
+    </g>
+  </g>
+
+  <!-- 订单 -->
+  <g>
+    <rect x="520" y="540" width="300" height="175" rx="10" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5"/>
+    <path d="M 520 550 a10 10 0 0 1 10 -10 h280 a10 10 0 0 1 10 10 v20 h-300 z" fill="#dbeafe"/>
+    <text x="670" y="570" text-anchor="middle" font-size="14" font-weight="700" fill="#1e40af">订单（orders）</text>
+    <g font-size="11" fill="#334155">
+      <text x="532" y="592" font-weight="700">PK id　order_no（唯一）</text>
+      <text x="532" y="611">FK task_id → tasks（1:1）</text>
+      <text x="532" y="630">FK publisher_id · FK acceptor_id</text>
+      <text x="532" y="649">amount 金额 · status 状态</text>
+      <text x="532" y="668" font-weight="700">pay_status 资金位置（1/2/3）</text>
+      <text x="532" y="687">frozen_status · pay_time · confirm_time</text>
+      <text x="532" y="706">cancel_reason</text>
+    </g>
+  </g>
+
+  <!-- 钱包流水 -->
+  <g>
+    <rect x="520" y="900" width="300" height="140" rx="10" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5"/>
+    <path d="M 520 910 a10 10 0 0 1 10 -10 h280 a10 10 0 0 1 10 10 v20 h-300 z" fill="#dbeafe"/>
+    <text x="670" y="930" text-anchor="middle" font-size="14" font-weight="700" fill="#1e40af">钱包流水（wallet_records）</text>
+    <g font-size="11" fill="#334155">
+      <text x="532" y="952" font-weight="700">PK id</text>
+      <text x="532" y="971">FK user_id · FK order_id</text>
+      <text x="532" y="990">type 流水类型（1~7）</text>
+      <text x="532" y="1009">amount 变动 · balance 余额快照</text>
+      <text x="532" y="1028">remark · created_at</text>
+    </g>
+  </g>
+
+  <!-- 服务分类 -->
+  <g>
+    <rect x="1080" y="160" width="290" height="120" rx="10" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5"/>
+    <path d="M 1080 170 a10 10 0 0 1 10 -10 h270 a10 10 0 0 1 10 10 v20 h-290 z" fill="#dbeafe"/>
+    <text x="1225" y="190" text-anchor="middle" font-size="14" font-weight="700" fill="#1e40af">服务分类（categories）</text>
+    <g font-size="11" fill="#334155">
+      <text x="1092" y="212" font-weight="700">PK id　name 名称</text>
+      <text x="1092" y="231">icon · color</text>
+      <text x="1092" y="250">address_mode 地址模式（取/送）</text>
+      <text x="1092" y="269">sort 排序 · status 状态</text>
+    </g>
+  </g>
+
+  <!-- 评价 -->
+  <g>
+    <rect x="1080" y="540" width="290" height="120" rx="10" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5"/>
+    <path d="M 1080 550 a10 10 0 0 1 10 -10 h270 a10 10 0 0 1 10 10 v20 h-290 z" fill="#dbeafe"/>
+    <text x="1225" y="570" text-anchor="middle" font-size="14" font-weight="700" fill="#1e40af">评价（reviews）</text>
+    <g font-size="11" fill="#334155">
+      <text x="1092" y="592" font-weight="700">PK id　FK order_id</text>
+      <text x="1092" y="611">FK reviewer_id / FK reviewee_id</text>
+      <text x="1092" y="630">rating 星级 1~5</text>
+      <text x="1092" y="649">content · tags</text>
+    </g>
+  </g>
+
+  <!-- 投诉 -->
+  <g>
+    <rect x="1080" y="860" width="290" height="120" rx="10" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5"/>
+    <path d="M 1080 870 a10 10 0 0 1 10 -10 h270 a10 10 0 0 1 10 10 v20 h-290 z" fill="#dbeafe"/>
+    <text x="1225" y="890" text-anchor="middle" font-size="14" font-weight="700" fill="#1e40af">投诉（complaints）</text>
+    <g font-size="11" fill="#334155">
+      <text x="1092" y="912" font-weight="700">PK id　FK order_id</text>
+      <text x="1092" y="931">complainant_id / respondent_id</text>
+      <text x="1092" y="950">reason · images · description</text>
+      <text x="1092" y="969">status · handle_result · handled_at</text>
+    </g>
+  </g>
+
+  <!-- ================= 系统支撑实体 ================= -->
+  <text x="70" y="1688" font-size="13" font-weight="600" fill="#475569">系统支撑实体（无业务外键关联）</text>
+  <line x1="70" y1="1696" x2="1370" y2="1696" stroke="#cbd5e1" stroke-width="1.5"/>
+
+  <g>
+    <rect x="70" y="1712" width="300" height="110" rx="10" fill="#f1f5f9" stroke="#64748b" stroke-width="1.5"/>
+    <path d="M 70 1722 a10 10 0 0 1 10 -10 h280 a10 10 0 0 1 10 10 v20 h-300 z" fill="#e2e8f0"/>
+    <text x="220" y="1742" text-anchor="middle" font-size="14" font-weight="700" fill="#334155">管理员（admins）</text>
+    <g font-size="11" fill="#475569">
+      <text x="82" y="1764" font-weight="700">PK id　username（唯一）</text>
+      <text x="82" y="1783">password_hash · role（1 普通 / 2 超管）</text>
+      <text x="82" y="1802">status · last_login_at</text>
+    </g>
+  </g>
+
+  <g>
+    <rect x="420" y="1712" width="300" height="110" rx="10" fill="#f1f5f9" stroke="#64748b" stroke-width="1.5"/>
+    <path d="M 420 1722 a10 10 0 0 1 10 -10 h280 a10 10 0 0 1 10 10 v20 h-300 z" fill="#e2e8f0"/>
+    <text x="570" y="1742" text-anchor="middle" font-size="14" font-weight="700" fill="#334155">社区公告（announcements）</text>
+    <g font-size="11" fill="#475569">
+      <text x="432" y="1764" font-weight="700">PK id　title · content</text>
+      <text x="432" y="1783">status（1 上架 / 0 下架）</text>
+      <text x="432" y="1802">created_at</text>
+    </g>
+  </g>
+
+  <g>
+    <rect x="770" y="1712" width="300" height="110" rx="10" fill="#f1f5f9" stroke="#64748b" stroke-width="1.5"/>
+    <path d="M 770 1722 a10 10 0 0 1 10 -10 h280 a10 10 0 0 1 10 10 v20 h-300 z" fill="#e2e8f0"/>
+    <text x="920" y="1742" text-anchor="middle" font-size="14" font-weight="700" fill="#334155">操作审计日志（operation_logs）</text>
+    <g font-size="11" fill="#475569">
+      <text x="782" y="1764" font-weight="700">PK id　operator_type / operator_id</text>
+      <text x="782" y="1783">action · target_type / target_id</text>
+      <text x="782" y="1802">detail · ip · created_at</text>
+    </g>
+  </g>
+
+  <g>
+    <rect x="1120" y="1712" width="250" height="110" rx="10" fill="#f1f5f9" stroke="#64748b" stroke-width="1.5"/>
+    <path d="M 1120 1722 a10 10 0 0 1 10 -10 h230 a10 10 0 0 1 10 10 v20 h-250 z" fill="#e2e8f0"/>
+    <text x="1245" y="1742" text-anchor="middle" font-size="14" font-weight="700" fill="#334155">应用配置（app_settings）</text>
+    <g font-size="11" fill="#475569">
+      <text x="1132" y="1764" font-weight="700">PK key</text>
+      <text x="1132" y="1783">value（迁移标记等）</text>
+    </g>
+  </g>
+
+  <!-- ================= 图例与注释 ================= -->
+  <g>
+    <rect x="70" y="1852" width="40" height="24" rx="5" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5"/>
+    <text x="120" y="1869" font-size="12" fill="#475569">实体（数据表）</text>
+    <polygon points="215,1864 240,1852 265,1864 240,1876" fill="#fffbeb" stroke="#b45309" stroke-width="1.5"/>
+    <text x="275" y="1869" font-size="12" fill="#475569">联系</text>
+    <text x="330" y="1869" font-size="12" fill="#475569">1 : 1 一对一　1 : n 一对多　PK 主键　FK 外键　蓝底＝业务表　灰底＝支撑表</text>
+    <text x="70" y="1902" font-size="12" fill="#64748b">注：orders / reviews / complaints / wallet_records 中指向 users 的参与人外键（发布者、接单者、评价双方、投诉双方、流水归属）均为 1:n 联系，图中省略以保持版面清晰。</text>
+    <text x="70" y="1924" font-size="12" fill="#64748b">完整字段与约束见 backend/src/db.js 建表语句；operation_logs.operator_id 为多态关联（operator_type 区分用户 / 管理员），同一身份证号全局唯一（acceptor_profiles）。</text>
+  </g>
+</svg>

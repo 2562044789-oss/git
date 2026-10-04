@@ -1,0 +1,105 @@
+<svg viewBox="0 0 680 660" width="680" height="660" role="img" xmlns="http://www.w3.org/2000/svg">
+<title>阳光社区邻里快办系统用例图</title>
+<desc>游客、普通用户、接单员、管理员与系统用例的关系</desc>
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+</defs>
+<rect x="158" y="52" width="384" height="572" rx="14" fill="#F8FAFC" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="350" y="74" text-anchor="middle" font-size="13" font-weight="500" fill="#2C2C2A">阳光社区邻里快办系统</text>
+<g stroke="#85B7EB" stroke-width="1" fill="none">
+  <line x1="85" y1="108" x2="169" y2="105"/>
+  <line x1="85" y1="112" x2="169" y2="150"/>
+  <line x1="85" y1="116" x2="169" y2="195"/>
+  <line x1="85" y1="328" x2="169" y2="245"/>
+  <line x1="85" y1="330" x2="169" y2="295"/>
+  <line x1="85" y1="332" x2="169" y2="345"/>
+  <line x1="85" y1="334" x2="169" y2="395"/>
+  <line x1="85" y1="336" x2="169" y2="445"/>
+  <line x1="85" y1="338" x2="169" y2="495"/>
+  <line x1="85" y1="536" x2="359" y2="115"/>
+  <line x1="85" y1="540" x2="359" y2="165"/>
+  <line x1="85" y1="544" x2="359" y2="215"/>
+  <line x1="605" y1="396" x2="531" y2="285"/>
+  <line x1="605" y1="398" x2="531" y2="335"/>
+  <line x1="605" y1="400" x2="531" y2="385"/>
+  <line x1="605" y1="402" x2="531" y2="435"/>
+  <line x1="605" y1="404" x2="531" y2="500"/>
+  <line x1="605" y1="406" x2="531" y2="550"/>
+</g>
+<g stroke="#5F5E5A" stroke-width="1" fill="none">
+  <line x1="75" y1="521" x2="75" y2="414"/>
+</g>
+<polygon points="75,400 68,414 82,414" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="1"/>
+<text x="84" y="472" font-size="11" fill="#888780">«泛化»</text>
+<g fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5">
+  <ellipse cx="255" cy="105" rx="86" ry="17"/>
+  <ellipse cx="255" cy="150" rx="86" ry="17"/>
+  <ellipse cx="255" cy="195" rx="86" ry="17"/>
+  <ellipse cx="255" cy="245" rx="86" ry="17"/>
+  <ellipse cx="255" cy="295" rx="86" ry="17"/>
+  <ellipse cx="255" cy="345" rx="86" ry="17"/>
+  <ellipse cx="255" cy="395" rx="86" ry="17"/>
+  <ellipse cx="255" cy="445" rx="86" ry="17"/>
+  <ellipse cx="255" cy="495" rx="86" ry="17"/>
+  <ellipse cx="445" cy="115" rx="86" ry="17"/>
+  <ellipse cx="445" cy="165" rx="86" ry="17"/>
+  <ellipse cx="445" cy="215" rx="86" ry="17"/>
+  <ellipse cx="445" cy="285" rx="86" ry="17"/>
+  <ellipse cx="445" cy="335" rx="86" ry="17"/>
+  <ellipse cx="445" cy="385" rx="86" ry="17"/>
+  <ellipse cx="445" cy="435" rx="86" ry="17"/>
+  <ellipse cx="445" cy="500" rx="86" ry="17"/>
+  <ellipse cx="445" cy="550" rx="86" ry="17"/>
+</g>
+<g font-size="12" fill="#0C447C" text-anchor="middle" dominant-baseline="central">
+  <text x="255" y="105">微信授权登录</text>
+  <text x="255" y="150">查看社区公告</text>
+  <text x="255" y="195">浏览任务大厅</text>
+  <text x="255" y="245">发布跑腿任务</text>
+  <text x="255" y="295">确认完成 / 评价</text>
+  <text x="255" y="345">充值 / 提现</text>
+  <text x="255" y="395">发起投诉</text>
+  <text x="255" y="445">申请接单认证</text>
+  <text x="255" y="495">接收消息通知</text>
+  <text x="445" y="115">浏览 / 接取任务</text>
+  <text x="445" y="165">缴纳保证金</text>
+  <text x="445" y="215">完成任务 / 结算</text>
+  <text x="445" y="285">审核接单认证</text>
+  <text x="445" y="335">处理投诉</text>
+  <text x="445" y="385">公告管理</text>
+  <text x="445" y="435">用户 / 数据管理</text>
+  <text x="445" y="500">资金裁决</text>
+  <text x="445" y="550">查看证件信息</text>
+</g>
+<g stroke="#444441" stroke-width="1.5" fill="#FFFFFF">
+  <circle cx="75" cy="95" r="9"/>
+  <circle cx="75" cy="315" r="9"/>
+  <circle cx="75" cy="530" r="9"/>
+  <circle cx="615" cy="390" r="9"/>
+</g>
+<g stroke="#444441" stroke-width="1.5" fill="none" stroke-linecap="round">
+  <line x1="75" y1="104" x2="75" y2="135"/><line x1="60" y1="113" x2="90" y2="113"/>
+  <line x1="75" y1="135" x2="63" y2="155"/><line x1="75" y1="135" x2="87" y2="155"/>
+  <line x1="75" y1="324" x2="75" y2="355"/><line x1="60" y1="333" x2="90" y2="333"/>
+  <line x1="75" y1="355" x2="63" y2="375"/><line x1="75" y1="355" x2="87" y2="375"/>
+  <line x1="75" y1="539" x2="75" y2="570"/><line x1="60" y1="548" x2="90" y2="548"/>
+  <line x1="75" y1="570" x2="63" y2="590"/><line x1="75" y1="570" x2="87" y2="590"/>
+  <line x1="615" y1="399" x2="615" y2="430"/><line x1="600" y1="408" x2="630" y2="408"/>
+  <line x1="615" y1="430" x2="603" y2="450"/><line x1="615" y1="430" x2="627" y2="450"/>
+</g>
+<g font-size="12" font-weight="500" fill="#2C2C2A" text-anchor="middle">
+  <text x="75" y="172">游客</text>
+  <text x="75" y="392">普通用户</text>
+  <text x="75" y="607">接单员</text>
+  <text x="615" y="467">管理员</text>
+</g>
+<g font-size="11" fill="#888780" text-anchor="middle">
+  <text x="75" y="188">未登录 / 未注册</text>
+  <text x="66" y="408" text-anchor="end">已注册居民</text>
+  <text x="75" y="623">已认证 + 保证金</text>
+  <text x="615" y="483">role ≥ 1（含超管权限）</text>
+</g>
+<text x="340" y="648" text-anchor="middle" font-size="11" fill="#888780">注：接单员继承普通用户的全部用例（同一账号可发布也可接单）；管理员含超级管理员权限（role = 2）。</text>
+</svg>

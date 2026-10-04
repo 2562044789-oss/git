@@ -2,6 +2,13 @@
 
 面向阳光社区居民的邻里互助跑腿平台。普通用户既可以发布代取快递、买菜代购、宠物照护、代扔垃圾等任务，也可以接单赚取报酬。项目按需求文档实现任务发布、费用托管、并发接单、服务进度、完成结算、互评、消息、投诉和运营管理后台。
 
+> **毕业设计项目，公开仅供学习参考。**
+> 仓库内所有姓名、手机号、身份证号、单位地址、金额与聊天内容均为**虚构的演示数据**，
+> 不对应任何真实自然人，请勿用于任何实际用途或二次分发。
+> 充值 / 提现 / 微信支付均为模拟流程，未接入任何真实支付渠道。
+> 小程序 AppID 已用占位符 `touristappid` 脱敏，真实 AppID 请自行配置在
+> `miniprogram/project.private.config.json`（该文件不入库）。
+
 ## 已实现功能
 
 用户端：
@@ -146,7 +153,9 @@ node --no-warnings scripts/screenshot.js --url http://127.0.0.1:3000/preview/ --
 1. 打开微信开发者工具。
 2. 选择“导入项目”。
 3. 项目目录选择 `outputs/sunshine-community-express/miniprogram`。
-4. AppID 可选择测试号。
+4. AppID 可选择测试号。仓库中的 `project.config.json` 使用占位符 `touristappid`；
+   如需用你自己的小程序，请在 `miniprogram/project.private.config.json` 里填入真实 AppID
+   （该文件已被 `.gitignore` 排除，不会进入版本库）。
 5. 在“详情 -> 本地设置”中勾选“不校验合法域名、web-view（业务域名）、TLS 版本以及 HTTPS 证书”。
 6. 确认后端已运行在 `http://localhost:3000`。
 
@@ -171,6 +180,13 @@ node --no-warnings backend/src/server.js
 ## 文档
 
 - [接口文档](docs/API.md)
+- [需求分析](docs/需求分析.md) ／ [需求分析.docx](docs/需求分析.docx)
 - [部署说明](docs/DEPLOYMENT.md)
 - [项目结构](docs/PROJECT_STRUCTURE.md)
 - [答辩演示流程](docs/DEMO_GUIDE.md)
+
+图示（均在 `docs/`）：
+
+- [系统用例图](docs/用例图.svg) — 5 参与者 18 用例，含泛化关系
+- [业务流程图](docs/业务流程图.svg) — 主流程 8 步 + 取消退款 / 投诉裁决两条异常分支
+- [数据库 E-R 图](docs/ER图.svg) — 16 张表的实体、联系与基数

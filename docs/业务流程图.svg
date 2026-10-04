@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 1130" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
+    </marker>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrowAmber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#b45309"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="960" height="1130" fill="#f8fafc"/>
+  <text x="480" y="46" text-anchor="middle" font-size="24" font-weight="700" fill="#0f172a">阳光社区邻里快办 · 业务流程图</text>
+  <text x="480" y="70" text-anchor="middle" font-size="13" fill="#64748b">主流程（实线）· 取消退款分支（蓝）· 投诉裁决分支（橙）</text>
+
+  <!-- ===== 主流程 ===== -->
+  <rect x="405" y="90" width="150" height="42" rx="21" fill="#0f172a"/>
+  <text x="480" y="117" text-anchor="middle" font-size="15" font-weight="600" fill="#ffffff">开 始</text>
+  <line x1="480" y1="132" x2="480" y2="186" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- s1 -->
+  <rect x="330" y="190" width="300" height="60" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="480" y="215" text-anchor="middle" font-size="15" font-weight="600" fill="#0f172a">① 居民发布任务</text>
+  <text x="480" y="237" text-anchor="middle" font-size="12" fill="#64748b">描述需求 · 选择分类与地址 · 约定金额</text>
+  <line x1="480" y1="250" x2="480" y2="282" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- s2 -->
+  <rect x="330" y="286" width="300" height="60" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="480" y="311" text-anchor="middle" font-size="15" font-weight="600" fill="#0f172a">② 余额支付 · 资金托管</text>
+  <text x="480" y="333" text-anchor="middle" font-size="12" fill="#64748b">钱包扣款进入托管（pay_status = 1 托管中）</text>
+  <line x1="480" y1="346" x2="480" y2="378" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- s3 -->
+  <rect x="330" y="382" width="300" height="60" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="480" y="407" text-anchor="middle" font-size="15" font-weight="600" fill="#0f172a">③ 接单员抢单</text>
+  <text x="480" y="429" text-anchor="middle" font-size="12" fill="#64748b">门槛：实名认证通过 + 已缴保证金 ¥50</text>
+  <line x1="480" y1="442" x2="480" y2="474" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- s4 -->
+  <rect x="330" y="478" width="300" height="60" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="480" y="503" text-anchor="middle" font-size="15" font-weight="600" fill="#0f172a">④ 联系发布者 · 执行任务</text>
+  <text x="480" y="525" text-anchor="middle" font-size="12" fill="#64748b">电话 / 留言沟通 · 按约定完成服务</text>
+  <line x1="480" y1="538" x2="480" y2="570" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- s5 -->
+  <rect x="330" y="574" width="300" height="60" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="480" y="599" text-anchor="middle" font-size="15" font-weight="600" fill="#0f172a">⑤ 接单员标记完成</text>
+  <text x="480" y="621" text-anchor="middle" font-size="12" fill="#64748b">任务状态：待发布者确认</text>
+  <line x1="480" y1="634" x2="480" y2="666" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- s6 -->
+  <rect x="330" y="670" width="300" height="60" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="480" y="695" text-anchor="middle" font-size="15" font-weight="600" fill="#0f172a">⑥ 发布者确认 · 资金结算</text>
+  <text x="480" y="717" text-anchor="middle" font-size="12" fill="#64748b">托管金额划给接单者（pay_status = 2 已结算）</text>
+  <line x1="480" y1="730" x2="480" y2="762" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- s7 -->
+  <rect x="330" y="766" width="300" height="60" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="480" y="791" text-anchor="middle" font-size="15" font-weight="600" fill="#0f172a">⑦ 双方互评</text>
+  <text x="480" y="813" text-anchor="middle" font-size="12" fill="#64748b">评分与评价内容写入评价记录</text>
+  <line x1="480" y1="826" x2="480" y2="858" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- s8 -->
+  <rect x="330" y="862" width="300" height="60" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="480" y="887" text-anchor="middle" font-size="15" font-weight="600" fill="#0f172a">⑧ 钱包流水入账</text>
+  <text x="480" y="909" text-anchor="middle" font-size="12" fill="#64748b">余额与流水成对写入（changeBalance）</text>
+  <line x1="480" y1="922" x2="480" y2="954" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- end -->
+  <rect x="405" y="958" width="150" height="42" rx="21" fill="#0f172a"/>
+  <text x="480" y="985" text-anchor="middle" font-size="15" font-weight="600" fill="#ffffff">流程结束</text>
+
+  <!-- ===== 左侧：取消退款分支 ===== -->
+  <polyline points="330,316 170,316 170,356" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrowBlue)"/>
+  <text x="250" y="308" text-anchor="middle" font-size="12" fill="#2563eb">长期无人接单</text>
+  <line x1="330" y1="412" x2="294" y2="404" stroke="#2563eb" stroke-width="2" marker-end="url(#arrowBlue)"/>
+  <text x="298" y="444" text-anchor="middle" font-size="12" fill="#2563eb">发布者取消</text>
+
+  <rect x="50" y="360" width="240" height="76" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="170" y="391" text-anchor="middle" font-size="14" font-weight="600" fill="#1e40af">任务关闭</text>
+  <text x="170" y="414" text-anchor="middle" font-size="12" fill="#3b82f6">订单进入取消状态</text>
+  <line x1="170" y1="436" x2="170" y2="472" stroke="#2563eb" stroke-width="2" marker-end="url(#arrowBlue)"/>
+
+  <rect x="50" y="476" width="240" height="76" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="170" y="507" text-anchor="middle" font-size="14" font-weight="600" fill="#1e40af">资金原路退回</text>
+  <text x="170" y="530" text-anchor="middle" font-size="12" fill="#3b82f6">pay_status = 3 已退回 · 生成退款流水</text>
+
+  <!-- ===== 右侧：投诉裁决分支 ===== -->
+  <line x1="630" y1="604" x2="666" y2="600" stroke="#b45309" stroke-width="2" marker-end="url(#arrowAmber)"/>
+  <text x="666" y="640" text-anchor="end" font-size="12" fill="#b45309">产生纠纷</text>
+
+  <rect x="670" y="562" width="240" height="76" rx="10" fill="#fffbeb" stroke="#b45309" stroke-width="1.5"/>
+  <text x="790" y="593" text-anchor="middle" font-size="14" font-weight="600" fill="#92400e">发起投诉</text>
+  <text x="790" y="616" text-anchor="middle" font-size="12" fill="#d97706">发布者或接单员提交投诉</text>
+  <line x1="790" y1="638" x2="790" y2="672" stroke="#b45309" stroke-width="2" marker-end="url(#arrowAmber)"/>
+
+  <rect x="670" y="676" width="240" height="76" rx="10" fill="#fffbeb" stroke="#b45309" stroke-width="1.5"/>
+  <text x="790" y="707" text-anchor="middle" font-size="14" font-weight="600" fill="#92400e">管理员裁决</text>
+  <text x="790" y="730" text-anchor="middle" font-size="12" fill="#d97706">管理后台查证 · 裁定资金归属</text>
+  <line x1="790" y1="752" x2="790" y2="786" stroke="#b45309" stroke-width="2" marker-end="url(#arrowAmber)"/>
+
+  <rect x="670" y="790" width="240" height="76" rx="10" fill="#fffbeb" stroke="#b45309" stroke-width="1.5"/>
+  <text x="790" y="821" text-anchor="middle" font-size="14" font-weight="600" fill="#92400e">执行裁决结果</text>
+  <text x="790" y="844" text-anchor="middle" font-size="12" fill="#d97706">退款或结算 · pay_status = 3 / 2</text>
+
+  <!-- 裁决后回流主流程 -->
+  <polyline points="670,828 630,828 630,796" fill="none" stroke="#b45309" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arrowAmber)"/>
+  <text x="790" y="892" text-anchor="middle" font-size="12" fill="#b45309">裁决后继续互评</text>
+
+  <!-- ===== 图例 ===== -->
+  <line x1="90" y1="1046" x2="140" y2="1046" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="150" y="1051" font-size="12" fill="#475569">主流程</text>
+  <line x1="230" y1="1046" x2="280" y2="1046" stroke="#2563eb" stroke-width="2" marker-end="url(#arrowBlue)"/>
+  <text x="290" y="1051" font-size="12" fill="#2563eb">取消 / 退款分支</text>
+  <line x1="410" y1="1046" x2="460" y2="1046" stroke="#b45309" stroke-width="2" marker-end="url(#arrowAmber)"/>
+  <text x="470" y="1051" font-size="12" fill="#b45309">投诉 / 裁决分支</text>
+  <line x1="600" y1="1046" x2="650" y2="1046" stroke="#b45309" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arrowAmber)"/>
+  <text x="660" y="1051" font-size="12" fill="#475569">分支处理完成回流主流程</text>
+
+  <text x="90" y="1090" font-size="12" fill="#64748b">资金状态 pay_status：1 = 托管中　2 = 已结算给接单者　3 = 已退回发布者（资金位置只由该字段决定）</text>
+  <text x="90" y="1110" font-size="12" fill="#64748b">接单门槛：实名认证通过（status = 3）且保证金已缴（deposit_status = 1）；保证金 ¥50 随认证缴纳、退出退还</text>
+</svg>
